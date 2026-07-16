@@ -151,6 +151,9 @@ let padDirty = false;
 let localJudgments = {};
 let lastRenderedRound = null;
 let lastRenderedPhase = null;
+let gamePollTimer = null;
+let refreshInFlight = null;
+let refreshQueued = false;
 
 function getUsername() {
   return (localStorage.getItem("club_username") || "").trim().toLowerCase();
@@ -496,34 +499,18 @@ function mpSubscribeRoom(roomId) {
     try { mpRoomChannel.unsubscribe(); } catch (_) {}
   }
   mpRoomChannel = mpAbly.channels.get(`club-room-${roomId}`);
-  mpRoomChannel.subscribe("state-update", (msg) => {
-    let d = msg.data;
-    if (typeof d === "string") try { d = JSON.parse(d); } catch (_) { return; }
-    if (d.state) {
-      // Refetch personalized view (answer-phase pad privacy)
-      refreshGameState();
-    }
-  });
+  const onSync = () => { refreshGameState(); };
+  mpRoomChannel.subscribe("state-update", onSync);
   mpRoomChannel.subscribe("game-start", () => {
     document.getElementById("mp-modal").classList.remove("open");
     enterGame();
   });
-  mpRoomChannel.subscribe("game-over", (msg) => {
-    let d = msg.data;
-    if (typeof d === "string") try { d = JSON.parse(d); } catch (_) { return; }
-    if (d.state) renderGame(d.state);
-  });
-  mpRoomChannel.subscribe("game-restart", (msg) => {
-    let d = msg.data;
-    if (typeof d === "string") try { d = JSON.parse(d); } catch (_) { return; }
+  mpRoomChannel.subscribe("game-over", onSync);
+  mpRoomChannel.subscribe("game-restart", () => {
     document.getElementById("result-modal").classList.remove("open");
     lastRenderedRound = null;
     lastRenderedPhase = "game_over";
-    if (d.state) {
-      renderGame(d.state);
-    } else {
-      refreshGameState();
-    }
+    refreshGameState();
   });
   mpRoomChannel.subscribe("player-status", async () => {
     if (mpRole === "host") refreshWaiting();
@@ -532,10 +519,46 @@ function mpSubscribeRoom(roomId) {
 
 async function refreshGameState() {
   if (!mpRoomId) return;
-  try {
-    const data = await api(`${GAME_URL}?room_id=${mpRoomId}&username=${encodeURIComponent(getUsername())}`);
-    if (data.state) renderGame(data.state);
-  } catch (_) {}
+  // Coalesce overlapping refreshes (Ably + poll); always run one more if skipped.
+  if (refreshInFlight) {
+    refreshQueued = true;
+    return refreshInFlight;
+  }
+  refreshInFlight = (async () => {
+    try {
+      const data = await api(
+        `${GAME_URL}?room_id=${mpRoomId}&username=${encodeURIComponent(getUsername())}`
+      );
+      if (data.state) renderGame(data.state);
+    } catch (_) {
+      // keep last good frame
+    } finally {
+      refreshInFlight = null;
+      if (refreshQueued) {
+        refreshQueued = false;
+        refreshGameState();
+      }
+    }
+  })();
+  return refreshInFlight;
+}
+
+function startGamePoll() {
+  stopGamePoll();
+  // Safety net if an Ably ping is missed (e.g. tab backgrounded).
+  gamePollTimer = setInterval(() => {
+    if (!mpRoomId) return;
+    if (!document.getElementById("view-game").classList.contains("active")) return;
+    if (gameState?.phase === "game_over") return;
+    refreshGameState();
+  }, 2500);
+}
+
+function stopGamePoll() {
+  if (gamePollTimer) {
+    clearInterval(gamePollTimer);
+    gamePollTimer = null;
+  }
 }
 
 async function enterGame() {
@@ -544,6 +567,7 @@ async function enterGame() {
   localJudgments = {};
   lastRenderedRound = null;
   lastRenderedPhase = null;
+  startGamePoll();
   await refreshGameState();
   requestAnimationFrame(resizeCanvas);
 }
@@ -686,6 +710,7 @@ async function mpLeaveGame() {
 }
 
 function handleLeftOrAbandoned(by) {
+  stopGamePoll();
   mpRoomId = null;
   gameState = null;
   localJudgments = {};

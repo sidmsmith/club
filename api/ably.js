@@ -1,8 +1,8 @@
 export async function ablyPublish(channel, eventName, data) {
   const key = process.env.ABLY_API_KEY;
-  if (!key) return;
+  if (!key) return false;
   try {
-    await fetch(`https://rest.ably.io/channels/${encodeURIComponent(channel)}/messages`, {
+    const res = await fetch(`https://rest.ably.io/channels/${encodeURIComponent(channel)}/messages`, {
       method: "POST",
       headers: {
         Authorization: `Basic ${Buffer.from(key).toString("base64")}`,
@@ -10,7 +10,10 @@ export async function ablyPublish(channel, eventName, data) {
       },
       body: JSON.stringify({ name: eventName, data: JSON.stringify(data) }),
     });
-  } catch (_) {}
+    return res.ok;
+  } catch (_) {
+    return false;
+  }
 }
 
 export const LOBBY_CHANNEL = "club-lobby";

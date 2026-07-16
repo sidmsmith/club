@@ -42,6 +42,23 @@ function parseState(raw) {
   return structuredClone(raw);
 }
 
+/** Ably has a ~64KB message limit — never broadcast pad images. Clients refetch via GET. */
+function slimNotify(roomId, gameState, extra = {}) {
+  const active = (gameState?.players || []).filter((p) => p.status === "active");
+  return {
+    room_id: roomId,
+    phase: gameState?.phase || null,
+    round: gameState?.round || null,
+    host: gameState?.host || null,
+    winners: gameState?.winners || [],
+    lastEvent: gameState?.lastEvent || null,
+    submittedUsernames: Object.keys(gameState?.submissions || {}),
+    scores: Object.fromEntries(active.map((p) => [p.username, p.score])),
+    sync: true,
+    ...extra,
+  };
+}
+
 export default async function handler(req, res) {
   cors(res);
   if (req.method === "OPTIONS") return res.status(200).end();
@@ -121,14 +138,14 @@ export default async function handler(req, res) {
           [room_id]
         );
 
-        const payload = {
+        const notify = slimNotify(room_id, gameState);
+        await ablyPublish(roomChannel(room_id), "game-start", notify);
+        await ablyPublish(roomChannel(room_id), "state-update", notify);
+
+        return res.status(200).json({
           room_id,
           state: publicState(gameState),
-        };
-        await ablyPublish(roomChannel(room_id), "game-start", payload);
-        await ablyPublish(roomChannel(room_id), "state-update", payload);
-
-        return res.status(200).json(payload);
+        });
       }
 
       if (!room.game_state) {
@@ -168,14 +185,10 @@ export default async function handler(req, res) {
              WHERE room_id=$1 AND username = ANY($2::text[])`,
             [room_id, gameState.players.map((p) => p.username)]
           );
-          // Ensure restart is obvious to all clients still on the winner modal.
           await saveGameState(client, room_id, gameState);
-          const restartPayload = {
-            room_id,
-            state: publicState(gameState, null),
-          };
-          await ablyPublish(roomChannel(room_id), "state-update", restartPayload);
-          await ablyPublish(roomChannel(room_id), "game-restart", restartPayload);
+          const notify = slimNotify(room_id, gameState);
+          await ablyPublish(roomChannel(room_id), "state-update", notify);
+          await ablyPublish(roomChannel(room_id), "game-restart", notify);
           return res.status(200).json({
             room_id,
             state: publicState(gameState, user),
@@ -212,23 +225,16 @@ export default async function handler(req, res) {
         room_id,
         state: publicState(gameState, user),
       };
-      // Broadcast a view without per-user filtering for others; clients refetch if needed.
-      const broadcast = {
-        room_id,
-        state: publicState(gameState, null),
-      };
-      await ablyPublish(roomChannel(room_id), "state-update", broadcast);
+      // Lightweight Ably ping only — images stay in Postgres / HTTP GET.
+      const notify = slimNotify(room_id, gameState);
+      await ablyPublish(roomChannel(room_id), "state-update", notify);
 
       if (action === "leave") {
         await ablyPublish(LOBBY_CHANNEL, "lobby-update", { username: user });
       }
 
       if (gameState.phase === "game_over") {
-        await ablyPublish(roomChannel(room_id), "game-over", {
-          room_id,
-          winners: gameState.winners,
-          state: broadcast.state,
-        });
+        await ablyPublish(roomChannel(room_id), "game-over", notify);
       }
 
       return res.status(200).json(payload);
