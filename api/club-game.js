@@ -109,7 +109,7 @@ export default async function handler(req, res) {
           .sort((a, b) => (a.seat_index ?? 0) - (b.seat_index ?? 0))
           .map((p) => p.username);
 
-        const gameState = createInitialState(usernames, { judge: room.host_username });
+        const gameState = createInitialState(usernames, { host: room.host_username });
 
         await client.query(
           `UPDATE club_rooms SET status='active', game_state=$2, started_at=NOW() WHERE id=$1`,
@@ -174,10 +174,10 @@ export default async function handler(req, res) {
             `UPDATE club_room_players SET status='left' WHERE room_id=$1 AND username=$2`,
             [room_id, user]
           );
-          if (gameState.judge !== room.host_username) {
+          if (gameState.host !== room.host_username) {
             await client.query(
               `UPDATE club_rooms SET host_username=$2 WHERE id=$1`,
-              [room_id, gameState.judge]
+              [room_id, gameState.host]
             );
           }
         } else {

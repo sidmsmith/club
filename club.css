@@ -164,18 +164,18 @@ header {
   flex-shrink: 0;
 }
 
-.judge-grid {
+.host-grid {
   flex: 1;
   min-height: 0;
   display: grid;
   gap: 8px;
   grid-template-columns: repeat(2, 1fr);
 }
-.judge-grid.cols-1 { grid-template-columns: 1fr; }
-.judge-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
-.judge-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
+.host-grid.cols-1 { grid-template-columns: 1fr; }
+.host-grid.cols-2 { grid-template-columns: repeat(2, 1fr); }
+.host-grid.cols-3 { grid-template-columns: repeat(3, 1fr); }
 
-.judge-cell {
+.host-cell {
   min-height: 0;
   border: 4px solid #bbb;
   background: #fff;
@@ -184,17 +184,17 @@ header {
   overflow: hidden;
   cursor: default;
 }
-.judge-cell.interactive { cursor: pointer; }
-.judge-cell.correct { border-color: var(--ok); }
-.judge-cell.incorrect { border-color: var(--bad); }
-.judge-cell img {
+.host-cell.interactive { cursor: pointer; }
+.host-cell.correct { border-color: var(--ok); }
+.host-cell.incorrect { border-color: var(--bad); }
+.host-cell img {
   flex: 1;
   min-height: 0;
   width: 100%;
   object-fit: contain;
   background: #fff;
 }
-.judge-cell .name {
+.host-cell .name {
   font-size: 0.7rem;
   font-weight: 700;
   text-align: center;
@@ -203,13 +203,13 @@ header {
   flex-shrink: 0;
 }
 
-.judge-actions {
+.host-actions {
   flex-shrink: 0;
   display: flex;
   justify-content: center;
   padding-top: 4px;
 }
-.judge-actions .btn { min-width: 60%; padding: 14px; font-size: 1rem; }
+.host-actions .btn { min-width: 60%; padding: 14px; font-size: 1rem; }
 
 /* Modals (reuse Flip patterns) */
 .modal-overlay {

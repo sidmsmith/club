@@ -1,6 +1,6 @@
 # Club
 
-Multiplayer drawing / judgment party game — lobby invites, server-authoritative rounds, Neon Postgres, Ably realtime.
+Multiplayer drawing / scoring party game — lobby invites, server-authoritative rounds, Neon Postgres, Ably realtime.
 
 Built as a sibling to [Flip 7](https://github.com/sidmsmith/flip): same Neon project (`club_*` tables) and Ably pattern.
 
@@ -39,12 +39,12 @@ Open `http://localhost:3000/club`.
 
 ## Gameflow
 
-1. Host invites 1–5 players (2–6 total) from the lobby.
-2. Each round: draw on the pad → Submit (can resubmit until everyone has submitted).
+1. Host invites 1-5 players (2-6 total) from the lobby.
+2. Each round: draw on the pad, then Submit (can resubmit until everyone has submitted).
 3. Names in the header are red until submitted, green after.
-4. When all have submitted, everyone sees all pads; the host (judge) marks correct/incorrect.
-5. Judge Submit awards +1 for correct answers and starts the next round.
-6. Judge can End Game anytime; Restart starts a new game in the same room (no lobby).
+4. When all have submitted, everyone sees all pads; the host marks correct/incorrect.
+5. Host Submit awards +1 for correct answers and starts the next round (pads clear for everyone).
+6. Host can End Game anytime; Restart starts a new game in the same room (no lobby).
 7. Leave removes only that player; others continue.
 
 ## Ably channels

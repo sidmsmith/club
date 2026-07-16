@@ -17,7 +17,7 @@
 
   <div id="view-home" class="active">
     <div class="home-title">Club</div>
-    <p class="home-sub">Draw your answer. The host judges each round. First place when the judge ends the game.</p>
+    <p class="home-sub">Draw your answer. The host scores each round. First place when the host ends the game.</p>
     <div class="user-badge" id="home-user">Set your name to play</div>
     <button class="btn btn-primary" id="find-game-btn" type="button">FIND GAME</button>
     <button class="btn" id="return-game-btn" type="button" style="display:none">RETURN TO GAME</button>
@@ -44,10 +44,10 @@
     </div>
 
     <div id="phase-judging">
-      <div class="judge-grid" id="judge-grid"></div>
-      <div class="judge-actions">
-        <button class="btn btn-submit" id="judge-submit-btn" type="button" disabled style="display:none">Submit</button>
-        <p class="wait-hint" id="judge-wait-hint" style="display:none">Waiting for the judge…</p>
+      <div class="host-grid" id="host-grid"></div>
+      <div class="host-actions">
+        <button class="btn btn-submit" id="host-submit-btn" type="button" disabled style="display:none">Submit</button>
+        <p class="wait-hint" id="host-wait-hint" style="display:none">Waiting for the host…</p>
       </div>
     </div>
   </div>
@@ -148,6 +148,8 @@ let mpPendingInvites = [];
 let gameState = null;
 let padDirty = false;
 let localJudgments = {};
+let lastRenderedRound = null;
+let lastRenderedPhase = null;
 
 function getUsername() {
   return (localStorage.getItem("club_username") || "").trim().toLowerCase();
@@ -311,13 +313,13 @@ function renderJudgingPhase(state) {
   document.getElementById("clear-btn").style.display = "none";
 
   const me = getUsername();
-  const isJudge = state.judge === me;
+  const isHost = state.host === me;
   const players = activePlayers(state);
-  const grid = document.getElementById("judge-grid");
+  const grid = document.getElementById("host-grid");
   const n = players.length;
-  grid.className = "judge-grid " + (n <= 1 ? "cols-1" : n <= 4 ? "cols-2" : "cols-3");
+  grid.className = "host-grid " + (n <= 1 ? "cols-1" : n <= 4 ? "cols-2" : "cols-3");
 
-  if (isJudge && Object.keys(localJudgments).length === 0) {
+  if (isHost && Object.keys(localJudgments).length === 0) {
     localJudgments = { ...(state.judgments || {}) };
     for (const p of players) {
       if (!(p.username in localJudgments)) localJudgments[p.username] = null;
@@ -326,16 +328,16 @@ function renderJudgingPhase(state) {
 
   grid.innerHTML = players.map((p) => {
     const img = state.submissions?.[p.username]?.imageDataUrl || "";
-    const j = isJudge ? localJudgments[p.username] : state.judgments?.[p.username];
+    const j = isHost ? localJudgments[p.username] : state.judgments?.[p.username];
     const cls = j === "correct" ? "correct" : j === "incorrect" ? "incorrect" : "";
-    return `<div class="judge-cell ${cls} ${isJudge ? "interactive" : ""}" data-user="${p.username}">
+    return `<div class="host-cell ${cls} ${isHost ? "interactive" : ""}" data-user="${p.username}">
       <img src="${img}" alt="${p.username}">
       <div class="name">${p.username.toUpperCase()}</div>
     </div>`;
   }).join("");
 
-  if (isJudge) {
-    grid.querySelectorAll(".judge-cell").forEach((cell) => {
+  if (isHost) {
+    grid.querySelectorAll(".host-cell").forEach((cell) => {
       cell.addEventListener("click", async () => {
         const u = cell.dataset.user;
         localJudgments[u] = cycleJudgment(localJudgments[u]);
@@ -354,37 +356,47 @@ function renderJudgingPhase(state) {
           showToast(err.message);
         }
         renderJudgingPhase({ ...gameState, judgments: { ...localJudgments } });
-        updateJudgeSubmitEnabled();
+        updateHostSubmitEnabled();
       });
     });
   }
 
-  document.getElementById("judge-submit-btn").style.display = isJudge ? "" : "none";
-  document.getElementById("judge-wait-hint").style.display = isJudge ? "none" : "block";
-  updateJudgeSubmitEnabled();
+  document.getElementById("host-submit-btn").style.display = isHost ? "" : "none";
+  document.getElementById("host-wait-hint").style.display = isHost ? "none" : "block";
+  updateHostSubmitEnabled();
 }
 
-function updateJudgeSubmitEnabled() {
+function updateHostSubmitEnabled() {
   const players = activePlayers(gameState);
   const all = players.every((p) => {
     const j = localJudgments[p.username];
     return j === "correct" || j === "incorrect";
   });
-  document.getElementById("judge-submit-btn").disabled = !all;
+  document.getElementById("host-submit-btn").disabled = !all;
 }
 
 function renderGame(state) {
   if (!state) return;
+  const prevRound = lastRenderedRound;
+  const prevPhase = lastRenderedPhase;
   gameState = state;
   document.getElementById("round-label").textContent = `Round: ${state.round}`;
   const me = getUsername();
-  const isJudge = state.judge === me;
+  const isHost = state.host === me;
   document.getElementById("end-game-btn").style.display =
-    isJudge && state.phase !== "game_over" ? "" : "none";
+    isHost && state.phase !== "game_over" ? "" : "none";
 
   renderScoreHeader(state);
 
   if (state.phase === "answer") {
+    // Clear every player's pad when a new round begins (or after scoring).
+    if (
+      prevPhase === "judging" ||
+      (prevRound !== null && state.round !== prevRound) ||
+      state.lastEvent?.type === "round_scored"
+    ) {
+      clearPad();
+    }
     localJudgments = {};
     renderAnswerPhase(state);
   } else if (state.phase === "judging") {
@@ -395,6 +407,9 @@ function renderGame(state) {
   } else if (state.phase === "game_over") {
     showGameOver(state);
   }
+
+  lastRenderedRound = state.round;
+  lastRenderedPhase = state.phase;
 }
 
 function showGameOver(state) {
@@ -409,8 +424,8 @@ function showGameOver(state) {
     .map((p) => `${p.username.toUpperCase()}: ${p.score}`)
     .join(" · ");
   document.getElementById("result-body").textContent = scores || "";
-  const isJudge = state.judge === getUsername();
-  document.getElementById("restart-btn").style.display = isJudge ? "" : "none";
+  const isHost = state.host === getUsername();
+  document.getElementById("restart-btn").style.display = isHost ? "" : "none";
   document.getElementById("result-modal").classList.add("open");
 }
 
@@ -508,6 +523,8 @@ async function enterGame() {
   showView("game");
   padDirty = false;
   localJudgments = {};
+  lastRenderedRound = null;
+  lastRenderedPhase = null;
   await refreshGameState();
   requestAnimationFrame(resizeCanvas);
 }
@@ -782,7 +799,7 @@ document.getElementById("submit-btn").addEventListener("click", async () => {
     showToast(err.message);
   }
 });
-document.getElementById("judge-submit-btn").addEventListener("click", async () => {
+document.getElementById("host-submit-btn").addEventListener("click", async () => {
   try {
     const data = await api(GAME_URL, {
       method: "PATCH",
@@ -793,8 +810,6 @@ document.getElementById("judge-submit-btn").addEventListener("click", async () =
       }),
     });
     localJudgments = {};
-    padDirty = false;
-    clearPad();
     if (data.state) renderGame(data.state);
   } catch (err) {
     showToast(err.message);
@@ -821,7 +836,8 @@ document.getElementById("restart-btn").addEventListener("click", async () => {
     });
     document.getElementById("result-modal").classList.remove("open");
     localJudgments = {};
-    padDirty = false;
+    lastRenderedRound = null;
+    lastRenderedPhase = null;
     clearPad();
     if (data.state) renderGame(data.state);
   } catch (err) {
@@ -830,7 +846,7 @@ document.getElementById("restart-btn").addEventListener("click", async () => {
 });
 document.getElementById("result-close").addEventListener("click", async () => {
   document.getElementById("result-modal").classList.remove("open");
-  // Leave only this player so the judge can still Restart for remaining players.
+  // Leave only this player so the host can still Restart for remaining players.
   if (mpRoomId) {
     try {
       await api(GAME_URL, {
