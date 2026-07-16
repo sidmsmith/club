@@ -103,7 +103,7 @@
       </div>
       <div class="modal-body">
         <div id="mp-wait-list"></div>
-        <p class="mp-hint">Need 2–6 accepted players to start. Select Available or Declined players, then Invite Selected.</p>
+        <p class="mp-hint">Need 2–6 accepted players to start. Select Available players to invite more before starting.</p>
         <div class="mp-wait-actions" id="mp-wait-actions">
           <button class="btn btn-primary" id="mp-wait-invite-btn" type="button" style="display:none" disabled>INVITE SELECTED</button>
           <button class="btn btn-primary" id="mp-start-btn" type="button" disabled>START GAME</button>
@@ -579,11 +579,14 @@ function seatsTakenInLobby(players = mpWaitPlayers) {
 function updateWaitInviteActions() {
   const actions = document.getElementById("mp-wait-actions");
   const inviteBtn = document.getElementById("mp-wait-invite-btn");
-  if (!actions || !inviteBtn) return;
+  const startBtn = document.getElementById("mp-start-btn");
+  if (!actions || !inviteBtn || !startBtn) return;
   const has = mpSelectedPlayers.size > 0;
   actions.classList.toggle("has-invite", has);
+  // One primary action at a time — never both Invite and Start.
   inviteBtn.style.display = has ? "" : "none";
   inviteBtn.disabled = !has;
+  startBtn.style.display = has ? "none" : "";
 }
 
 async function mpHeartbeat() {
@@ -937,11 +940,53 @@ function lobbyCancelConfirmMessage(players = mpWaitPlayers) {
   return "Cancel this lobby?";
 }
 
+/** No pending invites and no accepted guests — back to Game Lobby to invite again. */
+async function returnToGameLobbyNoInvites() {
+  if (returningToLobby) return;
+  returningToLobby = true;
+  const rid = mpRoomId;
+  const me = getUsername();
+  mpRoomId = null;
+  mpRole = null;
+  mpWaitPlayers = [];
+  mpSelectedPlayers = new Set();
+  if (mpRoomChannel) {
+    try { mpRoomChannel.unsubscribe(); } catch (_) {}
+    mpRoomChannel = null;
+  }
+  if (rid) {
+    try {
+      await api(ROOM_URL, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "abandon", room_id: rid, username: me }),
+      });
+    } catch (_) {}
+  }
+  document.getElementById("mp-active-game-banner").style.display = "none";
+  document.getElementById("return-game-btn").style.display = "none";
+  document.getElementById("mp-modal").classList.add("open");
+  mpShowMpView("lobby");
+  renderInvites();
+  startHeartbeat();
+  await mpLoadLobbyPlayers();
+  showToast("All invites declined — select players to invite again");
+  returningToLobby = false;
+}
+
 async function refreshWaiting() {
   if (!mpRoomId || returningToLobby) return;
   const data = await api(`${ROOM_URL}?room_id=${mpRoomId}`);
   mpWaitPlayers = data.players || [];
-  // Stay on Waiting even if everyone declined — they remain selectable to re-invite.
+
+  const hasPending = mpWaitPlayers.some((p) => p.status === "invited");
+  const hasAcceptedGuest = mpWaitPlayers.some(
+    (p) => p.role !== "host" && p.status === "accepted"
+  );
+  if (!hasPending && !hasAcceptedGuest) {
+    await returnToGameLobbyNoInvites();
+    return;
+  }
+
   await renderWaitingList();
 }
 
