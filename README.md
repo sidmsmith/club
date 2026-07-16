@@ -47,7 +47,9 @@ Open `http://localhost:3000/club`.
 6. Host can End Game anytime; Restart starts a new game in the same room (no lobby).
 7. Leave removes only that player; others continue.
 
-## Ably channels
+## Lobby / invites
 
-- `club-lobby` — presence, invites
-- `club-room-{roomId}` — in-room game events
+- Players only appear as **available** while they have **Find Game** open (heartbeat).
+- Closing the lobby removes you from availability immediately.
+- Anyone already in a lobby room or active game is not inviteable.
+- Invites are stored on the server; opening Find Game reloads any pending invites (so a missed Ably toast still works).

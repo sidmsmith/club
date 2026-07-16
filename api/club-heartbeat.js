@@ -18,10 +18,16 @@ export default async function handler(req, res) {
     await abandonStaleLobbyRooms(client);
 
     if (req.method === "POST") {
-      const { username, previous_username } = req.body || {};
+      const { username, previous_username, leave } = req.body || {};
       if (!username) return res.status(400).json({ error: "username required" });
       const u = username.toLowerCase();
       const prev = previous_username ? String(previous_username).toLowerCase() : null;
+
+      if (leave) {
+        await retireLobbyUsername(client, u);
+        await ablyPublish(LOBBY_CHANNEL, "lobby-update", { username: u, left: true });
+        return res.status(200).json({ ok: true });
+      }
 
       if (prev && prev !== u) {
         await retireLobbyUsername(client, prev);
@@ -43,15 +49,11 @@ export default async function handler(req, res) {
         SELECT
           u.username,
           CASE
-            WHEN mp.username IS NOT NULL THEN 'playing'
+            WHEN busy.username IS NOT NULL THEN 'playing'
             WHEN l.last_seen > NOW() - $1::INTERVAL THEN 'available'
             ELSE 'offline'
           END AS status
         FROM (
-          SELECT DISTINCT LOWER(username) AS username
-          FROM club_games
-          WHERE username IS NOT NULL AND username <> ''
-          UNION
           SELECT username FROM club_lobby
         ) u
         LEFT JOIN club_lobby l ON l.username = u.username
@@ -59,12 +61,13 @@ export default async function handler(req, res) {
           SELECT DISTINCT fp.username
           FROM club_room_players fp
           JOIN club_rooms fr ON fr.id = fp.room_id
-          WHERE fr.status = 'active' AND fp.status = 'playing'
-        ) mp ON mp.username = u.username
+          WHERE fr.status IN ('lobby', 'active')
+            AND fp.status NOT IN ('left', 'declined')
+        ) busy ON busy.username = u.username
         ORDER BY
           CASE
-            WHEN l.last_seen > NOW() - $1::INTERVAL THEN 0
-            WHEN mp.username IS NOT NULL THEN 1
+            WHEN busy.username IS NULL AND l.last_seen > NOW() - $1::INTERVAL THEN 0
+            WHEN busy.username IS NOT NULL THEN 1
             ELSE 2
           END,
           u.username ASC

@@ -4,6 +4,7 @@ import { MIN_PLAYERS, MAX_PLAYERS } from "../lib/club-constants.js";
 import {
   abandonStaleLobbyRooms,
   assertInviteesAvailable,
+  listPendingInvites,
 } from "./club-lobby-util.js";
 
 async function getRoomWithPlayers(client, roomId) {
@@ -85,19 +86,21 @@ export default async function handler(req, res) {
 
       if (username && !room_id) {
         const u = String(username).toLowerCase();
+        const pending_invites = await listPendingInvites(client, u);
+
         const { rows } = await client.query(
           `SELECT fr.id, fr.host_username, fr.status, fr.created_at,
                   fp.role, fp.status AS player_status
            FROM club_room_players fp
            JOIN club_rooms fr ON fr.id = fp.room_id
            WHERE fp.username = $1 AND fr.status IN ('lobby', 'active')
-             AND fp.status NOT IN ('left', 'declined')
+             AND fp.status NOT IN ('left', 'declined', 'invited')
            ORDER BY fr.created_at DESC
            LIMIT 1`,
           [u]
         );
         if (!rows.length) {
-          return res.status(200).json({ room_id: null });
+          return res.status(200).json({ room_id: null, pending_invites });
         }
         const row = rows[0];
         const { players } = await getRoomWithPlayers(client, row.id);
@@ -105,6 +108,7 @@ export default async function handler(req, res) {
           room_id: row.id,
           role: row.role,
           player_status: row.player_status,
+          pending_invites,
           room: {
             id: row.id,
             host_username: row.host_username,

@@ -89,10 +89,10 @@
           </div>
         </div>
         <div id="mp-inv-area"></div>
-        <div class="mp-hint" id="mp-lobby-status">Looking for players...</div>
-        <div class="mp-sec" id="mp-sec-online" style="display:none">ONLINE NOW</div>
+        <div class="mp-hint" id="mp-lobby-status">Looking for players in the lobby...</div>
+        <div class="mp-sec" id="mp-sec-online" style="display:none">IN LOBBY NOW</div>
         <div id="mp-lobby-list"></div>
-        <p class="mp-hint" id="mp-invite-hint">Select 1–5 players (2–6 total including you).</p>
+        <p class="mp-hint" id="mp-invite-hint">Only players who currently have Find Game open appear here. Select 1–5 players (2–6 total including you).</p>
         <button class="btn btn-primary" id="mp-invite-btn" type="button" style="width:100%;margin-top:8px" disabled>INVITE SELECTED</button>
       </div>
     </div>
@@ -579,6 +579,38 @@ function startHeartbeat() {
   mpHeartbeatTimer = setInterval(mpHeartbeat, 8000);
 }
 
+function stopHeartbeat() {
+  if (mpHeartbeatTimer) {
+    clearInterval(mpHeartbeatTimer);
+    mpHeartbeatTimer = null;
+  }
+  const u = getUsername();
+  if (u) {
+    api(HEARTBEAT_URL, {
+      method: "POST",
+      body: JSON.stringify({ username: u, leave: true }),
+    }).catch(() => {});
+  }
+}
+
+/** True while the Find Game modal is open (browsing, waiting, or ready). */
+function isInLobbyModal() {
+  return document.getElementById("mp-modal").classList.contains("open");
+}
+
+function mergePendingInvites(invites) {
+  const byRoom = new Map();
+  for (const inv of [...mpPendingInvites, ...(invites || [])]) {
+    if (!inv?.room_id) continue;
+    byRoom.set(inv.room_id, {
+      room_id: inv.room_id,
+      host: inv.host,
+      invitee: inv.invitee || getUsername(),
+    });
+  }
+  mpPendingInvites = [...byRoom.values()];
+}
+
 function mpLoadAbly() {
   return new Promise((resolve) => {
     if (window.Ably) { resolve(); return; }
@@ -601,9 +633,13 @@ function mpSubscribeLobby() {
     let d = msg.data;
     if (typeof d === "string") try { d = JSON.parse(d); } catch (_) { return; }
     if (d.invitee === getUsername()) {
-      mpPendingInvites.push(d);
-      renderInvites();
-      showToast(`${(d.host || "").toUpperCase()} invited you`);
+      mergePendingInvites([d]);
+      if (isInLobbyModal()) {
+        renderInvites();
+        showToast(`${(d.host || "").toUpperCase()} invited you`);
+      } else {
+        showToast(`${(d.host || "").toUpperCase()} invited you — open Find Game`);
+      }
     }
   });
   mpLobbyChannel.subscribe("room-abandoned", (msg) => {
@@ -682,6 +718,12 @@ function stopGamePoll() {
 
 async function enterGame() {
   showView("game");
+  stopHeartbeat();
+  if (mpLobbyRefreshTimer) {
+    clearInterval(mpLobbyRefreshTimer);
+    mpLobbyRefreshTimer = null;
+  }
+  document.getElementById("mp-modal").classList.remove("open");
   localJudgments = {};
   lastRenderedRound = null;
   lastRenderedPhase = null;
@@ -786,22 +828,39 @@ async function openFindGame() {
   mpSelectedPlayers = new Set();
   document.getElementById("mp-modal").classList.add("open");
   mpShowMpView("lobby");
-  await mpLoadLobbyPlayers();
-  renderInvites();
+
   try {
     const active = await api(`${ROOM_URL}?username=${encodeURIComponent(getUsername())}`);
+    mergePendingInvites(active.pending_invites || []);
+
     const banner = document.getElementById("mp-active-game-banner");
-    if (active.room_id && (active.room?.status === "active" || active.room?.status === "lobby")) {
+    // Only "return" for games you're already in (accepted/host/playing) — not bare invites.
+    if (
+      active.room_id &&
+      (active.room?.status === "active" || active.room?.status === "lobby") &&
+      active.player_status &&
+      active.player_status !== "invited"
+    ) {
       banner.style.display = "block";
       mpRoomId = active.room_id;
       mpRole = active.role;
-      document.getElementById("return-game-btn").style.display = "";
+      document.getElementById("return-game-btn").style.display =
+        active.room?.status === "active" ? "" : "none";
+      if (active.room?.status === "lobby") {
+        if (active.role === "host" || active.player_status === "accepted") {
+          if (active.role === "host") showLobbyWaitingView();
+          else mpShowMpView("accepted");
+        }
+      }
     } else {
       banner.style.display = "none";
     }
   } catch (_) {
     document.getElementById("mp-active-game-banner").style.display = "none";
   }
+
+  await mpLoadLobbyPlayers();
+  renderInvites();
   if (mpLobbyRefreshTimer) clearInterval(mpLobbyRefreshTimer);
   mpLobbyRefreshTimer = setInterval(mpLoadLobbyPlayers, 5000);
 }
@@ -867,12 +926,22 @@ document.getElementById("user-save").addEventListener("click", () => {
   setUsername(u);
   updateHomeUser();
   document.getElementById("user-modal").classList.remove("open");
-  startHeartbeat();
 });
 
 document.getElementById("find-game-btn").addEventListener("click", openFindGame);
 document.getElementById("mp-close").addEventListener("click", () => {
+  // Leaving the lobby browser — drop availability so you can't be invited from home.
+  const waiting =
+    document.getElementById("mp-v-waiting").style.display !== "none" ||
+    document.getElementById("mp-v-accepted").style.display !== "none";
   document.getElementById("mp-modal").classList.remove("open");
+  if (!waiting) {
+    stopHeartbeat();
+    if (mpLobbyRefreshTimer) {
+      clearInterval(mpLobbyRefreshTimer);
+      mpLobbyRefreshTimer = null;
+    }
+  }
 });
 document.getElementById("mp-invite-btn").addEventListener("click", async () => {
   try {
@@ -1074,16 +1143,18 @@ window.addEventListener("resize", () => {
 
 (async function init() {
   updateHomeUser();
+  // Do not heartbeat on the home screen — you only appear available inside Find Game.
   if (getUsername()) {
-    await mpLoadAbly();
-    mpSubscribeLobby();
-    startHeartbeat();
     try {
       const active = await api(`${ROOM_URL}?username=${encodeURIComponent(getUsername())}`);
       if (active.room_id && active.room?.status === "active") {
         document.getElementById("return-game-btn").style.display = "";
         mpRoomId = active.room_id;
         mpRole = active.role;
+      }
+      if (active.pending_invites?.length) {
+        mergePendingInvites(active.pending_invites);
+        showToast("You have a game invite — open Find Game");
       }
     } catch (_) {}
   }
