@@ -205,6 +205,79 @@ export default async function handler(req, res) {
         return res.status(200).json({ ok: true });
       }
 
+      // Host invites more players (or re-invites declined) into an existing lobby room.
+      if (action === "invite") {
+        const invitees = Array.isArray(req.body?.invitees) ? req.body.invitees : [];
+        const uniqueInvitees = [...new Set(invitees.map((i) => String(i).toLowerCase()))].filter(
+          (i) => i && i !== user
+        );
+        if (!uniqueInvitees.length) {
+          return res.status(400).json({ error: "invitees required" });
+        }
+
+        const { room, players } = await getRoomWithPlayers(client, room_id);
+        if (!room) return res.status(404).json({ error: "room not found" });
+        if (room.status !== "lobby") {
+          return res.status(400).json({ error: "Can only invite while the lobby is open." });
+        }
+        if (String(room.host_username).toLowerCase() !== user) {
+          return res.status(403).json({ error: "Only the host can invite" });
+        }
+
+        const byName = new Map(players.map((p) => [p.username.toLowerCase(), p]));
+        for (const name of uniqueInvitees) {
+          const existing = byName.get(name);
+          if (existing && (existing.status === "accepted" || existing.status === "invited")) {
+            return res.status(400).json({
+              error: `${name.toUpperCase()} is already in this lobby.`,
+            });
+          }
+        }
+
+        const seated = players.filter(
+          (p) => p.status === "accepted" || p.status === "invited" || p.role === "host"
+        ).length;
+        const adding = uniqueInvitees.filter((name) => {
+          const existing = byName.get(name);
+          return !existing || existing.status === "declined" || existing.status === "left";
+        }).length;
+        if (seated + adding > MAX_PLAYERS) {
+          return res.status(400).json({
+            error: `Club allows at most ${MAX_PLAYERS} players.`,
+          });
+        }
+
+        const availErr = await assertInviteesAvailable(client, uniqueInvitees);
+        if (availErr) return res.status(400).json({ error: availErr });
+
+        let nextSeat = players.reduce((m, p) => Math.max(m, p.seat_index ?? 0), 0) + 1;
+        for (const invitee of uniqueInvitees) {
+          const existing = byName.get(invitee);
+          if (existing) {
+            await client.query(
+              `UPDATE club_room_players SET status='invited', role='player'
+               WHERE room_id=$1 AND username=$2`,
+              [room_id, invitee]
+            );
+          } else {
+            await client.query(
+              `INSERT INTO club_room_players (room_id, username, role, status, seat_index)
+               VALUES ($1,$2,'player','invited',$3)`,
+              [room_id, invitee, nextSeat++]
+            );
+          }
+          await ablyPublish(LOBBY_CHANNEL, "invite", {
+            invitee,
+            host: user,
+            room_id,
+          });
+        }
+
+        const updated = await getRoomWithPlayers(client, room_id);
+        await ablyPublish(roomChannel(room_id), "player-status", { players: updated.players });
+        return res.status(200).json({ ok: true, players: updated.players });
+      }
+
       if (action === "abandon") {
         await client.query(
           `UPDATE club_rooms SET status='abandoned', ended_at=NOW() WHERE id=$1`,

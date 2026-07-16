@@ -351,6 +351,7 @@ header {
 }
 .mp-row.selected { border-color: var(--submit); background: #e8f5e9; }
 .mp-row .st { font-size: 0.7rem; color: var(--muted); }
+.mp-row .st.declined { color: #c62828; }
 .mp-inv-banner {
   background: #fff8e1;
   border: 1px solid #ffe082;
