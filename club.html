@@ -777,28 +777,48 @@ async function enterGame() {
   requestAnimationFrame(resizeCanvas);
 }
 
+function lobbyPresenceLabel(status) {
+  const map = {
+    available: "Available",
+    host: "Host",
+    ready: "✓ Ready",
+    waiting: "Waiting…",
+    playing: "In game",
+    offline: "Offline",
+  };
+  return map[status] || status;
+}
+
 async function mpLoadLobbyPlayers() {
   try {
     const data = await api(HEARTBEAT_URL);
     const me = getUsername();
     const list = document.getElementById("mp-lobby-list");
-    const available = (data.players || []).filter((p) => p.username !== me && p.status === "available");
+    // Everyone currently in the lobby space (including you) — not just inviteable people.
+    const players = (data.players || []).filter((p) => p.status && p.status !== "offline");
+    const inviteable = players.filter(
+      (p) => p.username !== me && p.status === "available"
+    );
     for (const u of [...mpSelectedPlayers]) {
-      if (!available.some((p) => p.username === u)) mpSelectedPlayers.delete(u);
+      if (!inviteable.some((p) => p.username === u)) mpSelectedPlayers.delete(u);
     }
-    document.getElementById("mp-sec-online").style.display = available.length ? "block" : "none";
-    document.getElementById("mp-lobby-status").style.display = available.length ? "none" : "block";
+    document.getElementById("mp-sec-online").style.display = players.length ? "block" : "none";
+    document.getElementById("mp-lobby-status").style.display = players.length ? "none" : "block";
     document.getElementById("mp-lobby-status").textContent = "Looking for players in the lobby...";
     const hint = document.getElementById("mp-invite-hint");
     if (hint) {
       hint.textContent =
-        "Only players who currently have Game Lobby open appear here. Select 1–5 players (2–6 total including you).";
+        "Players in Game Lobby appear here. Select Available players to invite (1–5). Host / Ready / In game are shown but not selectable.";
     }
-    list.innerHTML = available.map((p) => {
-      const sel = mpSelectedPlayers.has(p.username) ? "selected" : "";
-      return `<div class="mp-row ${sel}" data-user="${p.username}"><span>${p.username.toUpperCase()}</span><span class="st">${p.status}</span></div>`;
+    list.innerHTML = players.map((p) => {
+      const isMe = p.username === me;
+      const canSelect = !isMe && p.status === "available";
+      const sel = canSelect && mpSelectedPlayers.has(p.username) ? "selected" : "";
+      const clickable = canSelect ? " selectable" : "";
+      const you = isMe ? " (YOU)" : "";
+      return `<div class="mp-row${clickable} ${sel}" data-user="${p.username}" data-selectable="${canSelect ? "1" : "0"}"><span>${p.username.toUpperCase()}${you}</span><span class="st">${lobbyPresenceLabel(p.status)}</span></div>`;
     }).join("");
-    list.querySelectorAll(".mp-row").forEach((row) => {
+    list.querySelectorAll(".mp-row[data-selectable='1']").forEach((row) => {
       row.addEventListener("click", () => {
         const u = row.dataset.user;
         if (mpSelectedPlayers.has(u)) mpSelectedPlayers.delete(u);

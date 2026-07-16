@@ -49,26 +49,46 @@ export default async function handler(req, res) {
         SELECT
           u.username,
           CASE
-            WHEN busy.username IS NOT NULL THEN 'playing'
+            WHEN rm.room_status = 'active' THEN 'playing'
+            WHEN rm.role = 'host' AND rm.room_status = 'lobby' THEN 'host'
+            WHEN rm.player_status = 'accepted' AND rm.room_status = 'lobby' THEN 'ready'
+            WHEN rm.player_status = 'invited' AND rm.room_status = 'lobby' THEN 'waiting'
             WHEN l.last_seen > NOW() - $1::INTERVAL THEN 'available'
             ELSE 'offline'
           END AS status
         FROM (
           SELECT username FROM club_lobby
-        ) u
-        LEFT JOIN club_lobby l ON l.username = u.username
-        LEFT JOIN (
-          SELECT DISTINCT fp.username
+          UNION
+          SELECT fp.username
           FROM club_room_players fp
           JOIN club_rooms fr ON fr.id = fp.room_id
           WHERE fr.status IN ('lobby', 'active')
             AND fp.status NOT IN ('left', 'declined')
-        ) busy ON busy.username = u.username
+        ) u
+        LEFT JOIN club_lobby l ON l.username = u.username
+        LEFT JOIN LATERAL (
+          SELECT fr.status AS room_status, fp.role, fp.status AS player_status
+          FROM club_room_players fp
+          JOIN club_rooms fr ON fr.id = fp.room_id
+          WHERE fp.username = u.username
+            AND fr.status IN ('lobby', 'active')
+            AND fp.status NOT IN ('left', 'declined')
+          ORDER BY
+            CASE fr.status WHEN 'active' THEN 0 WHEN 'lobby' THEN 1 ELSE 2 END,
+            fr.created_at DESC
+          LIMIT 1
+        ) rm ON true
+        WHERE
+          l.last_seen > NOW() - $1::INTERVAL
+          OR rm.room_status IS NOT NULL
         ORDER BY
           CASE
-            WHEN busy.username IS NULL AND l.last_seen > NOW() - $1::INTERVAL THEN 0
-            WHEN busy.username IS NOT NULL THEN 1
-            ELSE 2
+            WHEN rm.room_status = 'active' THEN 3
+            WHEN rm.role = 'host' AND rm.room_status = 'lobby' THEN 1
+            WHEN rm.player_status = 'accepted' AND rm.room_status = 'lobby' THEN 1
+            WHEN rm.player_status = 'invited' AND rm.room_status = 'lobby' THEN 2
+            WHEN l.last_seen > NOW() - $1::INTERVAL THEN 0
+            ELSE 4
           END,
           u.username ASC
         `,
