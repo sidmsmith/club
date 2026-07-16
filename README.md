@@ -24,9 +24,12 @@ For now, push the same updates to **both** `main` and `dev`. When a collaborator
 
 ```bash
 npm install
-npm test
+npm test                 # engine unit tests (no DB)
+npm run test:lobby       # lobby/invite scenario sims against Neon (needs NEON_DATABASE_URL)
 npx vercel dev
 ```
+
+`test:lobby` mocks Ably (`CLUB_ABLY_MOCK=1`) and exercises real Neon: invite, accept, decline, re-invite, start-with-pending-cancel, presence Host/Ready/Available, and busy-player invite blocking. Run it after lobby changes instead of full manual regression.
 
 Open `http://localhost:3000/club`.
 

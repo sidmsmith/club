@@ -1,12 +1,15 @@
-{
-  "name": "club",
-  "version": "1.0.0",
-  "private": true,
-  "type": "module",
-  "scripts": {
-    "test": "node --test lib/club-engine.test.js"
-  },
-  "dependencies": {
-    "pg": "^8.16.3"
-  }
-}
+{
+  "name": "club",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test lib/club-engine.test.js",
+    "test:lobby": "node --test lib/club-lobby-flows.test.js",
+    "test:all": "node --test lib/club-engine.test.js lib/club-lobby-flows.test.js"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
+  }
+}
+

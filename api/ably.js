@@ -1,4 +1,25 @@
+/** In-memory Ably capture for lobby scenario tests (set CLUB_ABLY_MOCK=1). */
+const mockMessages = [];
+
+export function getAblyMockMessages() {
+  return mockMessages.slice();
+}
+
+export function clearAblyMockMessages() {
+  mockMessages.length = 0;
+}
+
 export async function ablyPublish(channel, eventName, data) {
+  if (process.env.CLUB_ABLY_MOCK === "1") {
+    mockMessages.push({
+      channel,
+      name: eventName,
+      data: typeof data === "string" ? data : { ...data },
+      at: Date.now(),
+    });
+    return true;
+  }
+
   const key = process.env.ABLY_API_KEY;
   if (!key) return false;
   try {
