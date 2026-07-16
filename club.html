@@ -11,6 +11,7 @@
   <header>
     <div class="logo">CLUB</div>
     <div class="hdr-btns">
+      <button class="btn leave-btn hdr-leave" id="leave-game-btn" type="button" style="display:none">LEAVE</button>
       <button class="btn" id="user-btn" type="button">👤</button>
     </div>
   </header>
@@ -29,8 +30,7 @@
       <span class="round-label" id="round-label">Round: 1</span>
       <div style="display:flex;gap:6px;align-items:center">
         <button class="btn-clear" id="clear-btn" type="button" style="display:none">Clear</button>
-        <button class="btn leave-btn" id="end-game-btn" type="button" style="display:none">END GAME</button>
-        <button class="btn leave-btn" id="leave-game-btn" type="button">LEAVE</button>
+        <button class="btn end-game-btn" id="end-game-btn" type="button" style="display:none">END GAME</button>
       </div>
     </div>
 
@@ -172,6 +172,7 @@ function showToast(msg) {
 function showView(name) {
   document.getElementById("view-home").classList.toggle("active", name === "home");
   document.getElementById("view-game").classList.toggle("active", name === "game");
+  document.getElementById("leave-game-btn").style.display = name === "game" ? "" : "none";
 }
 
 function updateHomeUser() {
@@ -355,9 +356,10 @@ function renderJudgingPhase(state) {
     const img = state.submissions?.[p.username]?.imageDataUrl || "";
     const j = isHost ? localJudgments[p.username] : state.judgments?.[p.username];
     const cls = j === "correct" ? "correct" : j === "incorrect" ? "incorrect" : "";
+    const label = p.username.toUpperCase();
     return `<div class="host-cell ${cls} ${isHost ? "interactive" : ""}" data-user="${p.username}">
-      <img src="${img}" alt="${p.username}">
-      <div class="name">${p.username.toUpperCase()}</div>
+      <div class="name" title="${label}">${label}</div>
+      <img src="${img}" alt="${label}">
     </div>`;
   }).join("");
 

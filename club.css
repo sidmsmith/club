@@ -70,7 +70,26 @@ header {
 .btn-pass { background: var(--pass); color: #fff; border-color: var(--pass); }
 .btn-submit { background: var(--submit); color: #fff; border-color: var(--submit); }
 .btn-clear { background: var(--clear); color: #fff; border: none; padding: 4px 10px; font-size: 0.75rem; }
-.leave-btn { font-size: 0.7rem; padding: 4px 8px; }
+.leave-btn.hdr-leave {
+  font-size: 0.7rem;
+  padding: 5px 10px;
+  background: #fce8e6;
+  color: #c62828;
+  border: 1px solid #f5c6c2;
+  font-weight: 600;
+  opacity: 0.85;
+}
+.leave-btn.hdr-leave:hover {
+  opacity: 1;
+  background: #f8d7d4;
+}
+.end-game-btn {
+  font-size: 0.7rem;
+  padding: 4px 8px;
+  background: #fff;
+  color: #666;
+  border: 1px solid #ccc;
+}
 
 #view-home, #view-game { flex: 1; min-height: 0; display: none; flex-direction: column; }
 #view-home.active, #view-game.active { display: flex; }
@@ -195,12 +214,18 @@ header {
   background: #fff;
 }
 .host-cell .name {
-  font-size: 0.7rem;
-  font-weight: 700;
+  font-size: 0.75rem;
+  font-weight: 800;
+  letter-spacing: 0.03em;
   text-align: center;
-  padding: 2px;
-  background: #f0f0f0;
+  padding: 4px 6px;
+  background: #1a1a1a;
+  color: #fff;
   flex-shrink: 0;
+  line-height: 1.2;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
 }
 
 .host-actions {
