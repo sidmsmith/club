@@ -1,0 +1,869 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, user-scalable=no">
+<title>Club</title>
+<link rel="stylesheet" href="club.css">
+</head>
+<body>
+<div id="app">
+  <header>
+    <div class="logo">CLUB</div>
+    <div class="hdr-btns">
+      <button class="btn" id="user-btn" type="button">👤</button>
+    </div>
+  </header>
+
+  <div id="view-home" class="active">
+    <div class="home-title">Club</div>
+    <p class="home-sub">Draw your answer. The host judges each round. First place when the judge ends the game.</p>
+    <div class="user-badge" id="home-user">Set your name to play</div>
+    <button class="btn btn-primary" id="find-game-btn" type="button">FIND GAME</button>
+    <button class="btn" id="return-game-btn" type="button" style="display:none">RETURN TO GAME</button>
+  </div>
+
+  <div id="view-game">
+    <div class="game-header-info" id="score-header"></div>
+    <div class="game-toolbar">
+      <span class="round-label" id="round-label">Round: 1</span>
+      <div style="display:flex;gap:6px;align-items:center">
+        <button class="btn-clear" id="clear-btn" type="button" style="display:none">Clear</button>
+        <button class="btn leave-btn" id="end-game-btn" type="button" style="display:none">END GAME</button>
+        <button class="btn leave-btn" id="leave-game-btn" type="button">LEAVE</button>
+      </div>
+    </div>
+
+    <div id="phase-answer">
+      <div class="pad-wrap"><canvas id="draw-canvas"></canvas></div>
+      <p class="wait-hint" id="wait-hint" style="display:none">Waiting for others… you can still update and submit again.</p>
+      <div class="game-actions">
+        <button class="btn btn-pass" id="pass-btn" type="button" disabled>Pass</button>
+        <button class="btn btn-submit" id="submit-btn" type="button" disabled>Submit</button>
+      </div>
+    </div>
+
+    <div id="phase-judging">
+      <div class="judge-grid" id="judge-grid"></div>
+      <div class="judge-actions">
+        <button class="btn btn-submit" id="judge-submit-btn" type="button" disabled style="display:none">Submit</button>
+        <p class="wait-hint" id="judge-wait-hint" style="display:none">Waiting for the judge…</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="user-modal">
+  <div class="modal-card">
+    <div class="modal-hdr">
+      <span class="modal-title">WHO ARE YOU?</span>
+      <button class="modal-x" id="user-close" type="button">✕</button>
+    </div>
+    <div class="modal-body">
+      <input id="user-input" type="text" maxlength="32" autocomplete="off" placeholder="ENTER NAME">
+      <div class="mp-sec">EXISTING PLAYERS</div>
+      <div id="user-chips"></div>
+      <button class="btn btn-primary" id="user-save" type="button" style="width:100%">SAVE</button>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="mp-modal">
+  <div class="modal-card">
+    <div id="mp-v-lobby">
+      <div class="modal-hdr">
+        <span class="modal-title">FIND GAME</span>
+        <button class="modal-x" id="mp-close" type="button">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="mp-active-game-banner" class="mp-inv-banner" style="display:none">
+          <div class="mp-inv-text" id="mp-active-game-text">You have a game in progress.</div>
+          <div class="mp-inv-row">
+            <button class="mp-acc-btn" id="mp-return-btn" type="button">RETURN TO GAME</button>
+            <button class="mp-dec-btn" id="mp-leave-active-btn" type="button">LEAVE GAME</button>
+          </div>
+        </div>
+        <div id="mp-inv-area"></div>
+        <div class="mp-hint" id="mp-lobby-status">Looking for players...</div>
+        <div class="mp-sec" id="mp-sec-online" style="display:none">ONLINE NOW</div>
+        <div id="mp-lobby-list"></div>
+        <p class="mp-hint" id="mp-invite-hint">Select 1–5 players (2–6 total including you).</p>
+        <button class="btn btn-primary" id="mp-invite-btn" type="button" style="width:100%;margin-top:8px" disabled>INVITE SELECTED</button>
+      </div>
+    </div>
+    <div id="mp-v-waiting" style="display:none">
+      <div class="modal-hdr">
+        <span class="modal-title">WAITING</span>
+        <button class="btn" id="mp-cancel-btn" type="button">CANCEL</button>
+      </div>
+      <div class="modal-body">
+        <div id="mp-wait-list"></div>
+        <p class="mp-hint">Need 2–6 accepted players to start</p>
+        <button class="btn btn-primary" id="mp-start-btn" type="button" style="width:100%" disabled>START GAME</button>
+      </div>
+    </div>
+    <div id="mp-v-accepted" style="display:none">
+      <div class="modal-hdr"><span class="modal-title">GET READY</span></div>
+      <div class="modal-body">
+        <p class="mp-hint" id="mp-accepted-msg">Waiting for host...</p>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="modal-overlay" id="result-modal">
+  <div class="modal-card">
+    <div class="modal-body">
+      <div id="result-title"></div>
+      <div id="result-body"></div>
+      <button class="btn btn-primary" id="restart-btn" type="button" style="width:100%;display:none">RESTART</button>
+      <button class="btn" id="result-close" type="button" style="width:100%">BACK TO HOME</button>
+    </div>
+  </div>
+</div>
+
+<div class="toast" id="toast"></div>
+
+<script>
+const API_ORIGIN = location.hostname === "localhost" || location.hostname === "127.0.0.1"
+  ? "" : "https://club-sidmsmith.vercel.app";
+const ABLY_KEY = "ojJiew.TwVtNg:Cb6XcfElKgIpu-yNqlWVv3-ayRWw2vjo2JTH2w43mKk";
+const HEARTBEAT_URL = `${API_ORIGIN}/api/club-heartbeat`;
+const ROOM_URL = `${API_ORIGIN}/api/club-room`;
+const GAME_URL = `${API_ORIGIN}/api/club-game`;
+const USERS_URL = `${API_ORIGIN}/api/club-users`;
+
+const MIN_INVITEES = 1;
+const MAX_INVITEES = 5;
+
+let mpRoomId = null;
+let mpRole = null;
+let mpAbly = null;
+let mpLobbyChannel = null;
+let mpRoomChannel = null;
+let mpHeartbeatTimer = null;
+let mpLobbyRefreshTimer = null;
+let mpSelectedPlayers = new Set();
+let mpPendingInvites = [];
+let gameState = null;
+let padDirty = false;
+let localJudgments = {};
+
+function getUsername() {
+  return (localStorage.getItem("club_username") || "").trim().toLowerCase();
+}
+function setUsername(u) {
+  localStorage.setItem("club_username", u.trim().toLowerCase());
+}
+function showToast(msg) {
+  const t = document.getElementById("toast");
+  t.textContent = msg;
+  t.classList.add("show");
+  clearTimeout(showToast._t);
+  showToast._t = setTimeout(() => t.classList.remove("show"), 2500);
+}
+
+function showView(name) {
+  document.getElementById("view-home").classList.toggle("active", name === "home");
+  document.getElementById("view-game").classList.toggle("active", name === "game");
+}
+
+function updateHomeUser() {
+  const u = getUsername();
+  document.getElementById("home-user").textContent = u ? u.toUpperCase() : "Set your name to play";
+}
+
+async function api(url, opts) {
+  const res = await fetch(url, {
+    headers: { "Content-Type": "application/json" },
+    ...opts,
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) throw new Error(data.error || res.statusText);
+  return data;
+}
+
+// ── Canvas pad ──────────────────────────────────────────────────────────────
+const canvas = document.getElementById("draw-canvas");
+const ctx = canvas.getContext("2d");
+let drawing = false;
+
+function resizeCanvas() {
+  const wrap = canvas.parentElement;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = wrap.clientWidth;
+  const h = wrap.clientHeight;
+  if (w < 2 || h < 2) return;
+  const prev = canvas.toDataURL();
+  canvas.width = Math.floor(w * dpr);
+  canvas.height = Math.floor(h * dpr);
+  canvas.style.width = w + "px";
+  canvas.style.height = h + "px";
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+  ctx.lineCap = "round";
+  ctx.lineJoin = "round";
+  ctx.strokeStyle = "#111";
+  ctx.lineWidth = 3;
+  if (padDirty && prev) {
+    const img = new Image();
+    img.onload = () => ctx.drawImage(img, 0, 0, w, h);
+    img.src = prev;
+  } else {
+    ctx.fillStyle = "#fff";
+    ctx.fillRect(0, 0, w, h);
+  }
+}
+
+function clearPad() {
+  const w = canvas.clientWidth;
+  const h = canvas.clientHeight;
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, w, h);
+  padDirty = false;
+  document.getElementById("submit-btn").disabled = true;
+}
+
+function pointerPos(e) {
+  const r = canvas.getBoundingClientRect();
+  const src = e.touches ? e.touches[0] : e;
+  return { x: src.clientX - r.left, y: src.clientY - r.top };
+}
+
+function startDraw(e) {
+  if (gameState?.phase !== "answer") return;
+  e.preventDefault();
+  drawing = true;
+  const p = pointerPos(e);
+  ctx.beginPath();
+  ctx.moveTo(p.x, p.y);
+}
+function moveDraw(e) {
+  if (!drawing) return;
+  e.preventDefault();
+  const p = pointerPos(e);
+  ctx.lineTo(p.x, p.y);
+  ctx.stroke();
+  padDirty = true;
+  document.getElementById("submit-btn").disabled = false;
+}
+function endDraw() { drawing = false; }
+
+canvas.addEventListener("mousedown", startDraw);
+canvas.addEventListener("mousemove", moveDraw);
+canvas.addEventListener("mouseup", endDraw);
+canvas.addEventListener("mouseleave", endDraw);
+canvas.addEventListener("touchstart", startDraw, { passive: false });
+canvas.addEventListener("touchmove", moveDraw, { passive: false });
+canvas.addEventListener("touchend", endDraw);
+
+function exportPadDataUrl() {
+  const maxW = 640;
+  const scale = Math.min(1, maxW / canvas.width);
+  const w = Math.max(1, Math.floor(canvas.width * scale));
+  const h = Math.max(1, Math.floor(canvas.height * scale));
+  const off = document.createElement("canvas");
+  off.width = w;
+  off.height = h;
+  const octx = off.getContext("2d");
+  octx.fillStyle = "#fff";
+  octx.fillRect(0, 0, w, h);
+  octx.drawImage(canvas, 0, 0, w, h);
+  return off.toDataURL("image/jpeg", 0.72);
+}
+
+// ── Render game ─────────────────────────────────────────────────────────────
+function activePlayers(state) {
+  return (state?.players || []).filter((p) => p.status === "active");
+}
+
+function renderScoreHeader(state) {
+  const el = document.getElementById("score-header");
+  const answering = state.phase === "answer";
+  el.innerHTML = activePlayers(state).map((p) => {
+    let cls = "neutral";
+    if (answering) cls = p.hasSubmitted ? "done" : "pending";
+    return `<span class="player-chip ${cls}">${p.username.toUpperCase()} ${p.score}</span>`;
+  }).join("");
+}
+
+function renderAnswerPhase(state) {
+  document.getElementById("phase-answer").classList.add("active");
+  document.getElementById("phase-judging").classList.remove("active");
+  document.getElementById("clear-btn").style.display = "";
+  document.getElementById("pass-btn").disabled = true;
+  const me = getUsername();
+  const mine = state.players.find((p) => p.username === me);
+  const submitted = !!mine?.hasSubmitted;
+  document.getElementById("wait-hint").style.display = submitted ? "block" : "none";
+  document.getElementById("submit-btn").disabled = !padDirty;
+  requestAnimationFrame(resizeCanvas);
+}
+
+function cycleJudgment(current) {
+  if (current === null || current === undefined) return "correct";
+  if (current === "correct") return "incorrect";
+  return null;
+}
+
+function renderJudgingPhase(state) {
+  document.getElementById("phase-answer").classList.remove("active");
+  document.getElementById("phase-judging").classList.add("active");
+  document.getElementById("clear-btn").style.display = "none";
+
+  const me = getUsername();
+  const isJudge = state.judge === me;
+  const players = activePlayers(state);
+  const grid = document.getElementById("judge-grid");
+  const n = players.length;
+  grid.className = "judge-grid " + (n <= 1 ? "cols-1" : n <= 4 ? "cols-2" : "cols-3");
+
+  if (isJudge && Object.keys(localJudgments).length === 0) {
+    localJudgments = { ...(state.judgments || {}) };
+    for (const p of players) {
+      if (!(p.username in localJudgments)) localJudgments[p.username] = null;
+    }
+  }
+
+  grid.innerHTML = players.map((p) => {
+    const img = state.submissions?.[p.username]?.imageDataUrl || "";
+    const j = isJudge ? localJudgments[p.username] : state.judgments?.[p.username];
+    const cls = j === "correct" ? "correct" : j === "incorrect" ? "incorrect" : "";
+    return `<div class="judge-cell ${cls} ${isJudge ? "interactive" : ""}" data-user="${p.username}">
+      <img src="${img}" alt="${p.username}">
+      <div class="name">${p.username.toUpperCase()}</div>
+    </div>`;
+  }).join("");
+
+  if (isJudge) {
+    grid.querySelectorAll(".judge-cell").forEach((cell) => {
+      cell.addEventListener("click", async () => {
+        const u = cell.dataset.user;
+        localJudgments[u] = cycleJudgment(localJudgments[u]);
+        try {
+          await api(GAME_URL, {
+            method: "PATCH",
+            body: JSON.stringify({
+              action: "set_judgment",
+              room_id: mpRoomId,
+              username: me,
+              target_username: u,
+              value: localJudgments[u],
+            }),
+          });
+        } catch (err) {
+          showToast(err.message);
+        }
+        renderJudgingPhase({ ...gameState, judgments: { ...localJudgments } });
+        updateJudgeSubmitEnabled();
+      });
+    });
+  }
+
+  document.getElementById("judge-submit-btn").style.display = isJudge ? "" : "none";
+  document.getElementById("judge-wait-hint").style.display = isJudge ? "none" : "block";
+  updateJudgeSubmitEnabled();
+}
+
+function updateJudgeSubmitEnabled() {
+  const players = activePlayers(gameState);
+  const all = players.every((p) => {
+    const j = localJudgments[p.username];
+    return j === "correct" || j === "incorrect";
+  });
+  document.getElementById("judge-submit-btn").disabled = !all;
+}
+
+function renderGame(state) {
+  if (!state) return;
+  gameState = state;
+  document.getElementById("round-label").textContent = `Round: ${state.round}`;
+  const me = getUsername();
+  const isJudge = state.judge === me;
+  document.getElementById("end-game-btn").style.display =
+    isJudge && state.phase !== "game_over" ? "" : "none";
+
+  renderScoreHeader(state);
+
+  if (state.phase === "answer") {
+    localJudgments = {};
+    renderAnswerPhase(state);
+  } else if (state.phase === "judging") {
+    if (!Object.keys(localJudgments).length) {
+      localJudgments = { ...(state.judgments || {}) };
+    }
+    renderJudgingPhase(state);
+  } else if (state.phase === "game_over") {
+    showGameOver(state);
+  }
+}
+
+function showGameOver(state) {
+  const winners = state.winners || [];
+  const title = winners.length === 1
+    ? `${winners[0].toUpperCase()} WINS!`
+    : winners.length > 1
+      ? `TIE: ${winners.map((w) => w.toUpperCase()).join(" & ")}`
+      : "GAME OVER";
+  document.getElementById("result-title").textContent = title;
+  const scores = activePlayers(state)
+    .map((p) => `${p.username.toUpperCase()}: ${p.score}`)
+    .join(" · ");
+  document.getElementById("result-body").textContent = scores || "";
+  const isJudge = state.judge === getUsername();
+  document.getElementById("restart-btn").style.display = isJudge ? "" : "none";
+  document.getElementById("result-modal").classList.add("open");
+}
+
+// ── Lobby / multiplayer ─────────────────────────────────────────────────────
+function mpShowMpView(v) {
+  document.getElementById("mp-v-lobby").style.display = v === "lobby" ? "block" : "none";
+  document.getElementById("mp-v-waiting").style.display = v === "waiting" ? "block" : "none";
+  document.getElementById("mp-v-accepted").style.display = v === "accepted" ? "block" : "none";
+}
+
+async function mpHeartbeat() {
+  const u = getUsername();
+  if (!u) return;
+  try {
+    await api(HEARTBEAT_URL, { method: "POST", body: JSON.stringify({ username: u }) });
+  } catch (_) {}
+}
+
+function startHeartbeat() {
+  if (mpHeartbeatTimer) return;
+  mpHeartbeat();
+  mpHeartbeatTimer = setInterval(mpHeartbeat, 8000);
+}
+
+function mpLoadAbly() {
+  return new Promise((resolve) => {
+    if (window.Ably) { resolve(); return; }
+    const s = document.createElement("script");
+    s.src = "https://cdn.ably.com/lib/ably.min-2.js";
+    s.onload = () => resolve();
+    document.head.appendChild(s);
+  }).then(() => {
+    if (!mpAbly) mpAbly = new Ably.Realtime({ key: ABLY_KEY });
+  });
+}
+
+function mpSubscribeLobby() {
+  if (mpLobbyChannel) return;
+  mpLobbyChannel = mpAbly.channels.get("club-lobby");
+  mpLobbyChannel.subscribe("lobby-update", () => {
+    if (document.getElementById("mp-modal").classList.contains("open")) mpLoadLobbyPlayers();
+  });
+  mpLobbyChannel.subscribe("invite", (msg) => {
+    let d = msg.data;
+    if (typeof d === "string") try { d = JSON.parse(d); } catch (_) { return; }
+    if (d.invitee === getUsername()) {
+      mpPendingInvites.push(d);
+      renderInvites();
+      showToast(`${(d.host || "").toUpperCase()} invited you`);
+    }
+  });
+  mpLobbyChannel.subscribe("room-abandoned", (msg) => {
+    let d = msg.data;
+    if (typeof d === "string") try { d = JSON.parse(d); } catch (_) { return; }
+    if (d.room_id === mpRoomId) handleLeftOrAbandoned(d.abandoned_by);
+  });
+}
+
+function mpSubscribeRoom(roomId) {
+  if (mpRoomChannel) {
+    try { mpRoomChannel.unsubscribe(); } catch (_) {}
+  }
+  mpRoomChannel = mpAbly.channels.get(`club-room-${roomId}`);
+  mpRoomChannel.subscribe("state-update", (msg) => {
+    let d = msg.data;
+    if (typeof d === "string") try { d = JSON.parse(d); } catch (_) { return; }
+    if (d.state) {
+      // Refetch personalized view (answer-phase pad privacy)
+      refreshGameState();
+    }
+  });
+  mpRoomChannel.subscribe("game-start", () => {
+    document.getElementById("mp-modal").classList.remove("open");
+    enterGame();
+  });
+  mpRoomChannel.subscribe("game-over", (msg) => {
+    let d = msg.data;
+    if (typeof d === "string") try { d = JSON.parse(d); } catch (_) { return; }
+    if (d.state) renderGame(d.state);
+  });
+  mpRoomChannel.subscribe("player-status", async () => {
+    if (mpRole === "host") refreshWaiting();
+  });
+}
+
+async function refreshGameState() {
+  if (!mpRoomId) return;
+  try {
+    const data = await api(`${GAME_URL}?room_id=${mpRoomId}&username=${encodeURIComponent(getUsername())}`);
+    if (data.state) renderGame(data.state);
+  } catch (_) {}
+}
+
+async function enterGame() {
+  showView("game");
+  padDirty = false;
+  localJudgments = {};
+  await refreshGameState();
+  requestAnimationFrame(resizeCanvas);
+}
+
+async function mpLoadLobbyPlayers() {
+  try {
+    const data = await api(HEARTBEAT_URL);
+    const me = getUsername();
+    const list = document.getElementById("mp-lobby-list");
+    const available = (data.players || []).filter((p) => p.username !== me && p.status === "available");
+    document.getElementById("mp-sec-online").style.display = available.length ? "block" : "none";
+    document.getElementById("mp-lobby-status").style.display = available.length ? "none" : "block";
+    list.innerHTML = available.map((p) => {
+      const sel = mpSelectedPlayers.has(p.username) ? "selected" : "";
+      return `<div class="mp-row ${sel}" data-user="${p.username}"><span>${p.username.toUpperCase()}</span><span class="st">${p.status}</span></div>`;
+    }).join("");
+    list.querySelectorAll(".mp-row").forEach((row) => {
+      row.addEventListener("click", () => {
+        const u = row.dataset.user;
+        if (mpSelectedPlayers.has(u)) mpSelectedPlayers.delete(u);
+        else if (mpSelectedPlayers.size < MAX_INVITEES) mpSelectedPlayers.add(u);
+        document.getElementById("mp-invite-btn").disabled = mpSelectedPlayers.size < MIN_INVITEES;
+        mpLoadLobbyPlayers();
+      });
+    });
+    document.getElementById("mp-invite-btn").disabled = mpSelectedPlayers.size < MIN_INVITEES;
+  } catch (err) {
+    showToast(err.message);
+  }
+}
+
+function renderInvites() {
+  const area = document.getElementById("mp-inv-area");
+  const me = getUsername();
+  const invites = mpPendingInvites.filter((i) => i.invitee === me);
+  area.innerHTML = invites.map((inv, idx) => `
+    <div class="mp-inv-banner">
+      <div>${(inv.host || "").toUpperCase()} invited you to Club</div>
+      <div class="mp-inv-row">
+        <button class="mp-acc-btn" data-idx="${idx}" data-act="accept">ACCEPT</button>
+        <button class="mp-dec-btn" data-idx="${idx}" data-act="decline">DECLINE</button>
+      </div>
+    </div>`).join("");
+  area.querySelectorAll("button").forEach((btn) => {
+    btn.addEventListener("click", async () => {
+      const inv = mpPendingInvites[Number(btn.dataset.idx)];
+      if (!inv) return;
+      try {
+        await api(ROOM_URL, {
+          method: "PATCH",
+          body: JSON.stringify({
+            action: btn.dataset.act,
+            room_id: inv.room_id,
+            username: me,
+          }),
+        });
+        mpPendingInvites = mpPendingInvites.filter((x) => x.room_id !== inv.room_id);
+        renderInvites();
+        if (btn.dataset.act === "accept") {
+          mpRoomId = inv.room_id;
+          mpRole = "player";
+          mpSubscribeRoom(mpRoomId);
+          mpShowMpView("accepted");
+        }
+      } catch (err) {
+        showToast(err.message);
+      }
+    });
+  });
+}
+
+async function refreshWaiting() {
+  if (!mpRoomId) return;
+  const data = await api(`${ROOM_URL}?room_id=${mpRoomId}`);
+  const players = data.players || [];
+  const list = document.getElementById("mp-wait-list");
+  list.innerHTML = players.map((p) =>
+    `<div class="mp-row"><span>${p.username.toUpperCase()}</span><span class="st">${p.status}</span></div>`
+  ).join("");
+  const accepted = players.filter((p) => p.status === "accepted" || p.role === "host").length;
+  document.getElementById("mp-start-btn").disabled = accepted < 2;
+}
+
+function showLobbyWaitingView() {
+  mpShowMpView("waiting");
+  refreshWaiting();
+}
+
+async function openFindGame() {
+  if (!getUsername()) {
+    document.getElementById("user-modal").classList.add("open");
+    return;
+  }
+  await mpLoadAbly();
+  mpSubscribeLobby();
+  startHeartbeat();
+  mpSelectedPlayers = new Set();
+  document.getElementById("mp-modal").classList.add("open");
+  mpShowMpView("lobby");
+  await mpLoadLobbyPlayers();
+  renderInvites();
+  try {
+    const active = await api(`${ROOM_URL}?username=${encodeURIComponent(getUsername())}`);
+    const banner = document.getElementById("mp-active-game-banner");
+    if (active.room_id && (active.room?.status === "active" || active.room?.status === "lobby")) {
+      banner.style.display = "block";
+      mpRoomId = active.room_id;
+      mpRole = active.role;
+      document.getElementById("return-game-btn").style.display = "";
+    } else {
+      banner.style.display = "none";
+    }
+  } catch (_) {
+    document.getElementById("mp-active-game-banner").style.display = "none";
+  }
+  if (mpLobbyRefreshTimer) clearInterval(mpLobbyRefreshTimer);
+  mpLobbyRefreshTimer = setInterval(mpLoadLobbyPlayers, 5000);
+}
+
+async function mpLeaveGame() {
+  if (!mpRoomId) return;
+  if (!confirm("Leave this game? Others will keep playing.")) return;
+  const me = getUsername();
+  try {
+    if (gameState && gameState.phase !== "game_over") {
+      await api(GAME_URL, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "leave", room_id: mpRoomId, username: me }),
+      });
+    } else {
+      await api(ROOM_URL, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "abandon", room_id: mpRoomId, username: me }),
+      });
+    }
+  } catch (err) {
+    showToast(err.message);
+  }
+  handleLeftOrAbandoned(me);
+}
+
+function handleLeftOrAbandoned(by) {
+  mpRoomId = null;
+  gameState = null;
+  localJudgments = {};
+  document.getElementById("mp-modal").classList.remove("open");
+  document.getElementById("result-modal").classList.remove("open");
+  document.getElementById("return-game-btn").style.display = "none";
+  showView("home");
+  if (by && by !== getUsername()) showToast(`${String(by).toUpperCase()} left`);
+  else showToast("Left game");
+}
+
+// ── Events ──────────────────────────────────────────────────────────────────
+document.getElementById("user-btn").addEventListener("click", async () => {
+  document.getElementById("user-input").value = getUsername();
+  document.getElementById("user-modal").classList.add("open");
+  try {
+    const data = await api(USERS_URL);
+    document.getElementById("user-chips").innerHTML = (data.users || []).map((u) =>
+      `<span class="user-chip" data-u="${u}">${u.toUpperCase()}</span>`
+    ).join("");
+    document.querySelectorAll(".user-chip").forEach((c) => {
+      c.addEventListener("click", () => {
+        document.getElementById("user-input").value = c.dataset.u;
+      });
+    });
+  } catch (_) {}
+});
+document.getElementById("user-close").addEventListener("click", () => {
+  document.getElementById("user-modal").classList.remove("open");
+});
+document.getElementById("user-save").addEventListener("click", () => {
+  const u = document.getElementById("user-input").value.trim().toLowerCase();
+  if (!u) return showToast("Enter a name");
+  setUsername(u);
+  updateHomeUser();
+  document.getElementById("user-modal").classList.remove("open");
+  startHeartbeat();
+});
+
+document.getElementById("find-game-btn").addEventListener("click", openFindGame);
+document.getElementById("mp-close").addEventListener("click", () => {
+  document.getElementById("mp-modal").classList.remove("open");
+});
+document.getElementById("mp-invite-btn").addEventListener("click", async () => {
+  try {
+    const data = await api(ROOM_URL, {
+      method: "POST",
+      body: JSON.stringify({
+        username: getUsername(),
+        invitees: [...mpSelectedPlayers],
+      }),
+    });
+    mpRoomId = data.room_id;
+    mpRole = "host";
+    await mpLoadAbly();
+    mpSubscribeRoom(mpRoomId);
+    showLobbyWaitingView();
+  } catch (err) {
+    showToast(err.message);
+  }
+});
+document.getElementById("mp-start-btn").addEventListener("click", async () => {
+  try {
+    await api(GAME_URL, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "start", room_id: mpRoomId, username: getUsername() }),
+    });
+    document.getElementById("mp-modal").classList.remove("open");
+    await enterGame();
+  } catch (err) {
+    showToast(err.message);
+  }
+});
+document.getElementById("mp-cancel-btn").addEventListener("click", async () => {
+  if (!mpRoomId) return;
+  try {
+    await api(ROOM_URL, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "abandon", room_id: mpRoomId, username: getUsername() }),
+    });
+  } catch (_) {}
+  mpRoomId = null;
+  mpShowMpView("lobby");
+});
+document.getElementById("mp-return-btn").addEventListener("click", async () => {
+  document.getElementById("mp-modal").classList.remove("open");
+  await mpLoadAbly();
+  mpSubscribeRoom(mpRoomId);
+  const data = await api(`${ROOM_URL}?username=${encodeURIComponent(getUsername())}`);
+  if (data.room?.status === "lobby") {
+    mpRole = data.role;
+    if (data.role === "host") showLobbyWaitingView();
+    else {
+      document.getElementById("mp-modal").classList.add("open");
+      mpShowMpView("accepted");
+    }
+  } else {
+    await enterGame();
+  }
+});
+document.getElementById("mp-leave-active-btn").addEventListener("click", mpLeaveGame);
+document.getElementById("return-game-btn").addEventListener("click", async () => {
+  const active = await api(`${ROOM_URL}?username=${encodeURIComponent(getUsername())}`);
+  if (!active.room_id) return showToast("No active game");
+  mpRoomId = active.room_id;
+  mpRole = active.role;
+  await mpLoadAbly();
+  mpSubscribeRoom(mpRoomId);
+  if (active.room?.status === "lobby") openFindGame();
+  else enterGame();
+});
+
+document.getElementById("clear-btn").addEventListener("click", clearPad);
+document.getElementById("submit-btn").addEventListener("click", async () => {
+  if (!padDirty || !mpRoomId) return;
+  try {
+    const imageDataUrl = exportPadDataUrl();
+    const data = await api(GAME_URL, {
+      method: "PATCH",
+      body: JSON.stringify({
+        action: "submit_answer",
+        room_id: mpRoomId,
+        username: getUsername(),
+        imageDataUrl,
+      }),
+    });
+    if (data.state) renderGame(data.state);
+    showToast("Submitted");
+  } catch (err) {
+    showToast(err.message);
+  }
+});
+document.getElementById("judge-submit-btn").addEventListener("click", async () => {
+  try {
+    const data = await api(GAME_URL, {
+      method: "PATCH",
+      body: JSON.stringify({
+        action: "submit_judgments",
+        room_id: mpRoomId,
+        username: getUsername(),
+      }),
+    });
+    localJudgments = {};
+    padDirty = false;
+    clearPad();
+    if (data.state) renderGame(data.state);
+  } catch (err) {
+    showToast(err.message);
+  }
+});
+document.getElementById("end-game-btn").addEventListener("click", async () => {
+  if (!confirm("End the game now?")) return;
+  try {
+    const data = await api(GAME_URL, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "end_game", room_id: mpRoomId, username: getUsername() }),
+    });
+    if (data.state) renderGame(data.state);
+  } catch (err) {
+    showToast(err.message);
+  }
+});
+document.getElementById("leave-game-btn").addEventListener("click", mpLeaveGame);
+document.getElementById("restart-btn").addEventListener("click", async () => {
+  try {
+    const data = await api(GAME_URL, {
+      method: "PATCH",
+      body: JSON.stringify({ action: "restart", room_id: mpRoomId, username: getUsername() }),
+    });
+    document.getElementById("result-modal").classList.remove("open");
+    localJudgments = {};
+    padDirty = false;
+    clearPad();
+    if (data.state) renderGame(data.state);
+  } catch (err) {
+    showToast(err.message);
+  }
+});
+document.getElementById("result-close").addEventListener("click", async () => {
+  document.getElementById("result-modal").classList.remove("open");
+  // Leaving room fully so lobby is free; restart keeps room for judge path.
+  if (mpRoomId && gameState?.phase === "game_over") {
+    try {
+      await api(ROOM_URL, {
+        method: "PATCH",
+        body: JSON.stringify({ action: "abandon", room_id: mpRoomId, username: getUsername() }),
+      });
+    } catch (_) {}
+  }
+  mpRoomId = null;
+  gameState = null;
+  showView("home");
+});
+
+window.addEventListener("resize", () => {
+  if (gameState?.phase === "answer") resizeCanvas();
+});
+
+(async function init() {
+  updateHomeUser();
+  if (getUsername()) {
+    await mpLoadAbly();
+    mpSubscribeLobby();
+    startHeartbeat();
+    try {
+      const active = await api(`${ROOM_URL}?username=${encodeURIComponent(getUsername())}`);
+      if (active.room_id && active.room?.status === "active") {
+        document.getElementById("return-game-btn").style.display = "";
+        mpRoomId = active.room_id;
+        mpRole = active.role;
+      }
+    } catch (_) {}
+  }
+})();
+</script>
+</body>
+</html>

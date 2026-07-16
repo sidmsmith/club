@@ -1,0 +1,12 @@
+{
+  "name": "club",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "test": "node --test lib/club-engine.test.js"
+  },
+  "dependencies": {
+    "pg": "^8.16.3"
+  }
+}
