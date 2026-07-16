@@ -123,6 +123,8 @@ export default async function handler(req, res) {
           });
         }
 
+        const pendingInvitees = players.filter((p) => p.status === "invited");
+
         const usernames = accepted
           .sort((a, b) => (a.seat_index ?? 0) - (b.seat_index ?? 0))
           .map((p) => p.username);
@@ -138,6 +140,19 @@ export default async function handler(req, res) {
            WHERE room_id=$1 AND (status='accepted' OR role='host')`,
           [room_id]
         );
+        // Withdraw unanswered invites so they don't linger after the game starts.
+        if (pendingInvitees.length) {
+          await client.query(
+            `UPDATE club_room_players SET status='left'
+             WHERE room_id=$1 AND status='invited'`,
+            [room_id]
+          );
+          await ablyPublish(LOBBY_CHANNEL, "invite-cancelled", {
+            room_id,
+            reason: "game_started",
+            invitees: pendingInvitees.map((p) => p.username),
+          });
+        }
 
         const notify = slimNotify(room_id, gameState);
         await ablyPublish(roomChannel(room_id), "game-start", notify);
@@ -146,6 +161,7 @@ export default async function handler(req, res) {
         return res.status(200).json({
           room_id,
           state: publicState(gameState),
+          cancelled_invites: pendingInvitees.map((p) => p.username),
         });
       }
 

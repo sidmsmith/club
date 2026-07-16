@@ -186,8 +186,14 @@ export default async function handler(req, res) {
       }
 
       if (action === "accept") {
+        const { room } = await getRoomWithPlayers(client, room_id);
+        if (!room) return res.status(404).json({ error: "room not found" });
+        if (room.status !== "lobby") {
+          return res.status(400).json({ error: "That invite is no longer available." });
+        }
         await client.query(
-          `UPDATE club_room_players SET status='accepted' WHERE room_id=$1 AND username=$2`,
+          `UPDATE club_room_players SET status='accepted'
+           WHERE room_id=$1 AND username=$2 AND status='invited'`,
           [room_id, user]
         );
         const { players } = await getRoomWithPlayers(client, room_id);
@@ -196,6 +202,12 @@ export default async function handler(req, res) {
       }
 
       if (action === "decline") {
+        const { room } = await getRoomWithPlayers(client, room_id);
+        if (!room) return res.status(404).json({ error: "room not found" });
+        if (room.status !== "lobby") {
+          // Game already started / cancelled — treat as cleared.
+          return res.status(200).json({ ok: true, cleared: true });
+        }
         await client.query(
           `UPDATE club_room_players SET status='declined' WHERE room_id=$1 AND username=$2`,
           [room_id, user]

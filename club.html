@@ -682,6 +682,22 @@ function mpSubscribeLobby() {
       resetLobbyAfterCancel(d.abandoned_by);
     }
   });
+  mpLobbyChannel.subscribe("invite-cancelled", (msg) => {
+    let d = msg.data;
+    if (typeof d === "string") try { d = JSON.parse(d); } catch (_) { return; }
+    const rid = d.room_id;
+    if (!rid) return;
+    const hadPending = mpPendingInvites.some((i) => i.room_id === rid);
+    mpPendingInvites = mpPendingInvites.filter((i) => i.room_id !== rid);
+    if (hadPending) {
+      renderInvites();
+      showToast(
+        d.reason === "game_started"
+          ? "Invite withdrawn — game already started"
+          : "Invite cancelled"
+      );
+    }
+  });
 }
 
 function mpSubscribeRoom(roomId) {
@@ -1239,6 +1255,17 @@ document.getElementById("mp-wait-invite-btn").addEventListener("click", async ()
   }
 });
 document.getElementById("mp-start-btn").addEventListener("click", async () => {
+  const pending = mpWaitPlayers.filter((p) => p.status === "invited");
+  if (pending.length) {
+    const names = pending.map((p) => p.username.toUpperCase()).join(", ");
+    if (
+      !confirm(
+        `${names} ${pending.length === 1 ? "hasn't" : "haven't"} accepted yet. Start without them? Their invite will be cancelled.`
+      )
+    ) {
+      return;
+    }
+  }
   try {
     await api(GAME_URL, {
       method: "PATCH",
