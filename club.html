@@ -193,6 +193,8 @@ async function api(url, opts) {
 const canvas = document.getElementById("draw-canvas");
 const ctx = canvas.getContext("2d");
 let drawing = false;
+/** Durable copy of the pad — survives resize/sync; only cleared on Clear or new round. */
+let padSnapshot = null;
 
 function resizeCanvas() {
   const wrap = canvas.parentElement;
@@ -200,7 +202,10 @@ function resizeCanvas() {
   const w = wrap.clientWidth;
   const h = wrap.clientHeight;
   if (w < 2 || h < 2) return;
-  const prev = canvas.toDataURL();
+  // Prefer durable snapshot so mid-flight refreshes cannot wipe a drawing.
+  if (padDirty && !padSnapshot) {
+    try { padSnapshot = canvas.toDataURL("image/png"); } catch (_) {}
+  }
   canvas.width = Math.floor(w * dpr);
   canvas.height = Math.floor(h * dpr);
   canvas.style.width = w + "px";
@@ -210,22 +215,30 @@ function resizeCanvas() {
   ctx.lineJoin = "round";
   ctx.strokeStyle = "#111";
   ctx.lineWidth = 3;
-  if (padDirty && prev) {
+  ctx.fillStyle = "#fff";
+  ctx.fillRect(0, 0, w, h);
+  if (padSnapshot) {
     const img = new Image();
-    img.onload = () => ctx.drawImage(img, 0, 0, w, h);
-    img.src = prev;
-  } else {
-    ctx.fillStyle = "#fff";
-    ctx.fillRect(0, 0, w, h);
+    const snap = padSnapshot;
+    img.onload = () => {
+      if (padSnapshot !== snap) return;
+      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      ctx.drawImage(img, 0, 0, w, h);
+    };
+    img.src = snap;
   }
 }
 
 function clearPad() {
-  const w = canvas.clientWidth;
-  const h = canvas.clientHeight;
+  padSnapshot = null;
+  padDirty = false;
+  const wrap = canvas.parentElement;
+  const dpr = Math.min(window.devicePixelRatio || 1, 2);
+  const w = wrap?.clientWidth || canvas.clientWidth || 1;
+  const h = wrap?.clientHeight || canvas.clientHeight || 1;
+  ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
   ctx.fillStyle = "#fff";
   ctx.fillRect(0, 0, w, h);
-  padDirty = false;
   document.getElementById("submit-btn").disabled = true;
 }
 
@@ -252,7 +265,12 @@ function moveDraw(e) {
   padDirty = true;
   document.getElementById("submit-btn").disabled = false;
 }
-function endDraw() { drawing = false; }
+function endDraw() {
+  drawing = false;
+  if (padDirty) {
+    try { padSnapshot = canvas.toDataURL("image/png"); } catch (_) {}
+  }
+}
 
 canvas.addEventListener("mousedown", startDraw);
 canvas.addEventListener("mousemove", moveDraw);
@@ -292,7 +310,7 @@ function renderScoreHeader(state) {
   }).join("");
 }
 
-function renderAnswerPhase(state) {
+function renderAnswerPhase(state, { forceResize = false } = {}) {
   document.getElementById("phase-answer").classList.add("active");
   document.getElementById("phase-judging").classList.remove("active");
   document.getElementById("clear-btn").style.display = "";
@@ -302,7 +320,10 @@ function renderAnswerPhase(state) {
   const submitted = !!mine?.hasSubmitted;
   document.getElementById("wait-hint").style.display = submitted ? "block" : "none";
   document.getElementById("submit-btn").disabled = !padDirty;
-  requestAnimationFrame(resizeCanvas);
+  // Do not resize on every poll/sync — that races and can wipe drawings.
+  if (forceResize || canvas.width < 2) {
+    requestAnimationFrame(resizeCanvas);
+  }
 }
 
 function cycleJudgment(current) {
@@ -398,17 +419,15 @@ function renderGame(state) {
     // Restart / next round: dismiss winner modal for everyone and show gameplay.
     document.getElementById("result-modal").classList.remove("open");
     if (state.phase === "answer") {
-      if (
+      // Clear pad ONLY when a new round / restart begins — never on submit/sync.
+      const newRound =
         prevPhase === "judging" ||
         prevPhase === "game_over" ||
-        (prevRound !== null && state.round !== prevRound) ||
-        state.lastEvent?.type === "round_scored" ||
-        state.lastEvent?.type === "game_start"
-      ) {
-        clearPad();
-      }
+        (prevRound !== null && state.round !== prevRound);
+      if (newRound) clearPad();
       localJudgments = {};
-      renderAnswerPhase(state);
+      const enteringAnswer = prevPhase !== "answer";
+      renderAnswerPhase(state, { forceResize: enteringAnswer || newRound });
     } else if (state.phase === "judging") {
       if (!Object.keys(localJudgments).length) {
         localJudgments = { ...(state.judgments || {}) };
@@ -563,10 +582,10 @@ function stopGamePoll() {
 
 async function enterGame() {
   showView("game");
-  padDirty = false;
   localJudgments = {};
   lastRenderedRound = null;
   lastRenderedPhase = null;
+  clearPad();
   startGamePoll();
   await refreshGameState();
   requestAnimationFrame(resizeCanvas);
@@ -827,6 +846,8 @@ document.getElementById("clear-btn").addEventListener("click", clearPad);
 document.getElementById("submit-btn").addEventListener("click", async () => {
   if (!padDirty || !mpRoomId) return;
   try {
+    // Lock in current ink before any sync/resize can race.
+    try { padSnapshot = canvas.toDataURL("image/png"); } catch (_) {}
     const imageDataUrl = exportPadDataUrl();
     const data = await api(GAME_URL, {
       method: "PATCH",
