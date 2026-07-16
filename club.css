@@ -171,6 +171,42 @@ header {
   gap: 8px;
 }
 .round-label { font-weight: 700; }
+.toolbar-right {
+  display: flex;
+  gap: 6px;
+  align-items: center;
+}
+.timer-slot {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 5.5rem;
+  height: 1.6rem;
+}
+.btn-timer {
+  background: #1565c0;
+  color: #fff;
+  border: none;
+  border-radius: 6px;
+  padding: 3px 8px;
+  font-size: 0.7rem;
+  font-weight: 700;
+  cursor: pointer;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.btn-timer:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+.round-timer {
+  font-size: 0.85rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.03em;
+  line-height: 1;
+  color: #1565c0;
+}
 
 #phase-answer, #phase-judging {
   flex: 1;
@@ -187,33 +223,6 @@ header {
   border: 2px solid var(--border);
   background: #fff;
   touch-action: none;
-}
-.timer-row {
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 6px;
-  flex-shrink: 0;
-}
-.btn-timer {
-  background: #1565c0;
-  color: #fff;
-  border-color: #1565c0;
-  padding: 8px 16px;
-  font-size: 0.85rem;
-}
-.btn-timer:disabled {
-  background: #90a4ae;
-  border-color: #90a4ae;
-  color: #fff;
-  opacity: 1;
-}
-.round-timer {
-  font-size: 1.6rem;
-  font-weight: 800;
-  font-variant-numeric: tabular-nums;
-  letter-spacing: 0.04em;
-  line-height: 1;
 }
 #draw-canvas {
   width: 100%;

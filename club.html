@@ -29,17 +29,17 @@
     <div class="game-header-info" id="score-header"></div>
     <div class="game-toolbar">
       <span class="round-label" id="round-label">Round: 1</span>
-      <div style="display:flex;gap:6px;align-items:center">
+      <div class="toolbar-right">
+        <span class="timer-slot" id="timer-slot">
+          <button class="btn-timer" id="start-timer-btn" type="button">Start Timer</button>
+          <span class="round-timer" id="round-timer" hidden>0.0s</span>
+        </span>
         <button class="btn-clear" id="clear-btn" type="button" style="display:none">Clear</button>
         <button class="btn end-game-btn" id="end-game-btn" type="button" style="display:none">END GAME</button>
       </div>
     </div>
 
     <div id="phase-answer">
-      <div class="timer-row">
-        <button class="btn btn-timer" id="start-timer-btn" type="button">Start Timer</button>
-        <div class="round-timer" id="round-timer" style="display:none">0.0s</div>
-      </div>
       <div class="pad-wrap"><canvas id="draw-canvas"></canvas></div>
       <p class="wait-hint" id="wait-hint" style="display:none">Waiting for others… you can still update and submit again.</p>
       <div class="game-actions">
@@ -366,22 +366,23 @@ function stopRoundTimerDisplay() {
 }
 
 function syncRoundTimer(state) {
+  const slot = document.getElementById("timer-slot");
   const btn = document.getElementById("start-timer-btn");
   const el = document.getElementById("round-timer");
   stopRoundTimerDisplay();
   if (!state || state.phase !== "answer") {
-    if (btn) btn.style.display = "none";
-    if (el) el.style.display = "none";
+    if (slot) slot.style.visibility = "hidden";
+    if (btn) btn.hidden = true;
+    if (el) el.hidden = true;
     return;
   }
-  btn.style.display = "";
+  slot.style.visibility = "visible";
   if (state.serverNow) {
     roundTimerOffset = Date.now() - state.serverNow;
   }
   if (state.timerStartedAt) {
-    btn.disabled = true;
-    btn.textContent = "Timer started";
-    el.style.display = "block";
+    btn.hidden = true;
+    el.hidden = false;
     const start = state.timerStartedAt;
     const tick = () => {
       const serverNowApprox = Date.now() - roundTimerOffset;
@@ -390,9 +391,10 @@ function syncRoundTimer(state) {
     tick();
     roundTimerInterval = setInterval(tick, 100);
   } else {
+    btn.hidden = false;
     btn.disabled = false;
     btn.textContent = "Start Timer";
-    el.style.display = "none";
+    el.hidden = true;
     el.textContent = "0.0s";
   }
 }
