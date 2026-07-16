@@ -8,10 +8,10 @@ Built as a sibling to [Flip 7](https://github.com/sidmsmith/flip): same Neon pro
 
 | Branch | Purpose |
 |--------|---------|
-| `main` | Production-ready releases |
-| `dev` | Collaboration / day-to-day work (Cursor Cloud Agents + PRs) |
+| `main` | Production (Vercel) |
+| `dev` | Kept in sync with `main` for now; use later for collaborator work |
 
-Feature work should land on `dev` (or short-lived branches off `dev`). Promote to `main` via PR when ready to ship.
+For now, push the same updates to **both** `main` and `dev`. When a collaborator joins, revisit using `dev` as the integration branch.
 
 ## Environment variables (Vercel)
 
@@ -35,7 +35,7 @@ Open `http://localhost:3000/club`.
 1. Import [sidmsmith/club](https://github.com/sidmsmith/club) in Vercel.
 2. Set `NEON_DATABASE_URL` and `ABLY_API_KEY`.
 3. Production branch: `main`. Optional preview branch: `dev`.
-4. Update `API_ORIGIN` in `club.html` to the Vercel URL after first deploy.
+4. Production URL: [https://clubgame.vercel.app/](https://clubgame.vercel.app/) (`API_ORIGIN` in `club.html`).
 
 ## Gameflow
 

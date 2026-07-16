@@ -23,9 +23,11 @@ git push -u origin HEAD
    - `ABLY_API_KEY`
 4. Production branch: `main`. Enable previews for `dev` if desired.
 
-## 3. After first deploy
+## 3. Production URL
 
-Update `API_ORIGIN` in `club.html` to your Vercel URL, commit, and push.
+App: [https://clubgame.vercel.app/](https://clubgame.vercel.app/)
+
+`API_ORIGIN` in `club.html` is set to that URL (empty string for local `vercel dev`).
 
 ## Local dev
 
