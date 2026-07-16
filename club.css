@@ -83,6 +83,33 @@ header {
   opacity: 1;
   background: #f8d7d4;
 }
+.hdr-wrench {
+  font-size: 1rem;
+  padding: 4px 8px;
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  line-height: 1;
+}
+.score-edit-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 8px 0;
+  border-bottom: 1px solid #eee;
+}
+.score-edit-row label {
+  font-weight: 700;
+  flex: 1;
+}
+.score-input {
+  width: 72px;
+  padding: 8px;
+  border: 1px solid #ccc;
+  border-radius: 8px;
+  font-size: 1rem;
+  text-align: center;
+}
 .end-game-btn {
   font-size: 0.7rem;
   padding: 4px 8px;

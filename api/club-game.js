@@ -151,7 +151,7 @@ export default async function handler(req, res) {
       if (!room.game_state) {
         return res.status(400).json({ error: "Game not started" });
       }
-      if (room.status !== "active" && action !== "restart") {
+      if (room.status !== "active" && action !== "restart" && action !== "set_scores") {
         return res.status(400).json({ error: "Game not active" });
       }
 
@@ -171,6 +171,10 @@ export default async function handler(req, res) {
           gameState = applyAction(gameState, "submit_judgments", user);
         } else if (action === "end_game") {
           gameState = applyAction(gameState, "end_game", user);
+        } else if (action === "set_scores") {
+          gameState = applyAction(gameState, "set_scores", user, {
+            scores: body.scores || {},
+          });
         } else if (action === "restart") {
           if (room.status !== "active" && room.status !== "complete") {
             return res.status(400).json({ error: "Cannot restart this room" });

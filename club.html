@@ -11,6 +11,7 @@
   <header>
     <div class="logo">CLUB</div>
     <div class="hdr-btns">
+      <button class="btn hdr-wrench" id="host-tools-btn" type="button" style="display:none" title="Host tools" aria-label="Host tools">🔧</button>
       <button class="btn leave-btn hdr-leave" id="leave-game-btn" type="button" style="display:none">LEAVE</button>
       <button class="btn" id="user-btn" type="button">👤</button>
     </div>
@@ -123,6 +124,20 @@
   </div>
 </div>
 
+<div class="modal-overlay" id="scores-modal">
+  <div class="modal-card">
+    <div class="modal-hdr">
+      <span class="modal-title">EDIT SCORES</span>
+      <button class="modal-x" id="scores-close" type="button">✕</button>
+    </div>
+    <div class="modal-body">
+      <p class="mp-hint">Adjust each player’s score, then save.</p>
+      <div id="scores-list"></div>
+      <button class="btn btn-primary" id="scores-save" type="button" style="width:100%">SAVE SCORES</button>
+    </div>
+  </div>
+</div>
+
 <div class="toast" id="toast"></div>
 
 <script>
@@ -173,6 +188,27 @@ function showView(name) {
   document.getElementById("view-home").classList.toggle("active", name === "home");
   document.getElementById("view-game").classList.toggle("active", name === "game");
   document.getElementById("leave-game-btn").style.display = name === "game" ? "" : "none";
+  if (name !== "game") {
+    document.getElementById("host-tools-btn").style.display = "none";
+  }
+}
+
+function updateHostToolsVisibility() {
+  const me = getUsername();
+  const show = !!(gameState && gameState.host === me && mpRoomId);
+  document.getElementById("host-tools-btn").style.display = show ? "" : "none";
+}
+
+function openScoresModal() {
+  if (!gameState) return;
+  const list = document.getElementById("scores-list");
+  list.innerHTML = activePlayers(gameState).map((p) => `
+    <div class="score-edit-row">
+      <label for="score-${p.username}">${p.username.toUpperCase()}</label>
+      <input id="score-${p.username}" class="score-input" type="number" min="0" max="9999" step="1"
+        data-user="${p.username}" value="${p.score}">
+    </div>`).join("");
+  document.getElementById("scores-modal").classList.add("open");
 }
 
 function updateHomeUser() {
@@ -412,6 +448,7 @@ function renderGame(state) {
   const isHost = state.host === me;
   document.getElementById("end-game-btn").style.display =
     isHost && state.phase !== "game_over" ? "" : "none";
+  updateHostToolsVisibility();
 
   renderScoreHeader(state);
 
@@ -895,6 +932,32 @@ document.getElementById("end-game-btn").addEventListener("click", async () => {
   }
 });
 document.getElementById("leave-game-btn").addEventListener("click", mpLeaveGame);
+document.getElementById("host-tools-btn").addEventListener("click", openScoresModal);
+document.getElementById("scores-close").addEventListener("click", () => {
+  document.getElementById("scores-modal").classList.remove("open");
+});
+document.getElementById("scores-save").addEventListener("click", async () => {
+  const scores = {};
+  document.querySelectorAll("#scores-list .score-input").forEach((input) => {
+    scores[input.dataset.user] = Number(input.value);
+  });
+  try {
+    const data = await api(GAME_URL, {
+      method: "PATCH",
+      body: JSON.stringify({
+        action: "set_scores",
+        room_id: mpRoomId,
+        username: getUsername(),
+        scores,
+      }),
+    });
+    document.getElementById("scores-modal").classList.remove("open");
+    if (data.state) renderGame(data.state);
+    showToast("Scores updated");
+  } catch (err) {
+    showToast(err.message);
+  }
+});
 document.getElementById("restart-btn").addEventListener("click", async () => {
   try {
     const data = await api(GAME_URL, {
