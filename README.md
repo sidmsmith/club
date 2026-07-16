@@ -49,7 +49,7 @@ Open `http://localhost:3000/club`.
 
 ## Lobby / invites
 
-- Players only appear as **available** while they have **Find Game** open (heartbeat).
+- Players only appear as **available** while they have **Game Lobby** open (heartbeat).
 - Closing the lobby removes you from availability immediately.
 - Anyone already in a lobby room or active game is not inviteable.
-- Invites are stored on the server; opening Find Game reloads any pending invites (so a missed Ably toast still works).
+- Invites are stored on the server; opening Game Lobby reloads any pending invites (so a missed Ably toast still works).

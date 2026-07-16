@@ -21,7 +21,7 @@
     <div class="home-title">Club</div>
     <p class="home-sub">Draw your answer. The host scores each round. First place when the host ends the game.</p>
     <div class="user-badge" id="home-user">Set your name to play</div>
-    <button class="btn btn-primary" id="find-game-btn" type="button">FIND GAME</button>
+    <button class="btn btn-primary" id="find-game-btn" type="button">GAME LOBBY</button>
     <button class="btn" id="return-game-btn" type="button" style="display:none">RETURN TO GAME</button>
   </div>
 
@@ -77,7 +77,7 @@
   <div class="modal-card">
     <div id="mp-v-lobby">
       <div class="modal-hdr">
-        <span class="modal-title">FIND GAME</span>
+        <span class="modal-title">GAME LOBBY</span>
         <button class="modal-x" id="mp-close" type="button">✕</button>
       </div>
       <div class="modal-body">
@@ -92,7 +92,7 @@
         <div class="mp-hint" id="mp-lobby-status">Looking for players in the lobby...</div>
         <div class="mp-sec" id="mp-sec-online" style="display:none">IN LOBBY NOW</div>
         <div id="mp-lobby-list"></div>
-        <p class="mp-hint" id="mp-invite-hint">Only players who currently have Find Game open appear here. Select 1–5 players (2–6 total including you).</p>
+        <p class="mp-hint" id="mp-invite-hint">Only players who currently have Game Lobby open appear here. Select 1–5 players (2–6 total including you).</p>
         <button class="btn btn-primary" id="mp-invite-btn" type="button" style="width:100%;margin-top:8px" disabled>INVITE SELECTED</button>
       </div>
     </div>
@@ -593,7 +593,7 @@ function stopHeartbeat() {
   }
 }
 
-/** True while the Find Game modal is open (browsing, waiting, or ready). */
+/** True while the Game Lobby modal is open (browsing, waiting, or ready). */
 function isInLobbyModal() {
   return document.getElementById("mp-modal").classList.contains("open");
 }
@@ -638,7 +638,7 @@ function mpSubscribeLobby() {
         renderInvites();
         showToast(`${(d.host || "").toUpperCase()} invited you`);
       } else {
-        showToast(`${(d.host || "").toUpperCase()} invited you — open Find Game`);
+        showToast(`${(d.host || "").toUpperCase()} invited you — open Game Lobby`);
       }
     }
   });
@@ -1143,7 +1143,7 @@ window.addEventListener("resize", () => {
 
 (async function init() {
   updateHomeUser();
-  // Do not heartbeat on the home screen — you only appear available inside Find Game.
+  // Do not heartbeat on the home screen — you only appear available inside Game Lobby.
   if (getUsername()) {
     try {
       const active = await api(`${ROOM_URL}?username=${encodeURIComponent(getUsername())}`);
@@ -1154,7 +1154,7 @@ window.addEventListener("resize", () => {
       }
       if (active.pending_invites?.length) {
         mergePendingInvites(active.pending_invites);
-        showToast("You have a game invite — open Find Game");
+        showToast("You have a game invite — open Game Lobby");
       }
     } catch (_) {}
   }
