@@ -22,14 +22,20 @@ For now, push the same updates to **both** `main` and `dev`. When a collaborator
 
 ## Local development
 
+Work in the **`club/`** folder (this repo), not the parent `Web/` folder.
+
+1. Copy `.env.example` to `.env.local` and set `NEON_DATABASE_URL` (and optionally `ABLY_API_KEY`).
+2. Run commands from `club/`:
+
 ```bash
+cd club
 npm install
 npm test                 # engine unit tests (no DB)
-npm run test:lobby       # lobby/invite scenario sims against Neon (needs NEON_DATABASE_URL)
+npm run test:lobby       # lobby/invite scenario sims (reads .env.local)
 npx vercel dev
 ```
 
-`test:lobby` mocks Ably (`CLUB_ABLY_MOCK=1`) and exercises real Neon: invite, accept, decline, re-invite, start-with-pending-cancel, presence Host/Ready/Available, and busy-player invite blocking. Run it after lobby changes instead of full manual regression.
+`test:lobby` mocks Ably and exercises real Neon: invite, accept, decline, re-invite, start-with-pending-cancel, presence Host/Ready/Available, and busy-player invite blocking. Run it after lobby changes instead of full manual regression.
 
 Open `http://localhost:3000/club`.
 
