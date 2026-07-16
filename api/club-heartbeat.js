@@ -44,12 +44,13 @@ export default async function handler(req, res) {
     }
 
     if (req.method === "GET") {
+      // Presence for Game Lobby only. Players in an active game are hidden until
+      // they leave/end and open Game Lobby again (restart keeps them out).
       const { rows } = await client.query(
         `
         SELECT
           u.username,
           CASE
-            WHEN rm.room_status = 'active' THEN 'playing'
             WHEN rm.role = 'host' AND rm.room_status = 'lobby' THEN 'host'
             WHEN rm.player_status = 'accepted' AND rm.room_status = 'lobby' THEN 'ready'
             WHEN rm.player_status = 'invited' AND rm.room_status = 'lobby' THEN 'waiting'
@@ -62,7 +63,7 @@ export default async function handler(req, res) {
           SELECT fp.username
           FROM club_room_players fp
           JOIN club_rooms fr ON fr.id = fp.room_id
-          WHERE fr.status IN ('lobby', 'active')
+          WHERE fr.status = 'lobby'
             AND fp.status NOT IN ('left', 'declined')
         ) u
         LEFT JOIN club_lobby l ON l.username = u.username
@@ -79,16 +80,18 @@ export default async function handler(req, res) {
           LIMIT 1
         ) rm ON true
         WHERE
-          l.last_seen > NOW() - $1::INTERVAL
-          OR rm.room_status IS NOT NULL
+          (rm.room_status IS NULL OR rm.room_status = 'lobby')
+          AND (
+            l.last_seen > NOW() - $1::INTERVAL
+            OR rm.room_status = 'lobby'
+          )
         ORDER BY
           CASE
-            WHEN rm.room_status = 'active' THEN 3
             WHEN rm.role = 'host' AND rm.room_status = 'lobby' THEN 1
             WHEN rm.player_status = 'accepted' AND rm.room_status = 'lobby' THEN 1
             WHEN rm.player_status = 'invited' AND rm.room_status = 'lobby' THEN 2
             WHEN l.last_seen > NOW() - $1::INTERVAL THEN 0
-            ELSE 4
+            ELSE 3
           END,
           u.username ASC
         `,

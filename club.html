@@ -783,7 +783,6 @@ function lobbyPresenceLabel(status) {
     host: "Host",
     ready: "✓ Ready",
     waiting: "Waiting…",
-    playing: "In game",
     offline: "Offline",
   };
   return map[status] || status;
@@ -808,7 +807,7 @@ async function mpLoadLobbyPlayers() {
     const hint = document.getElementById("mp-invite-hint");
     if (hint) {
       hint.textContent =
-        "Players in Game Lobby appear here. Select Available players to invite (1–5). Host / Ready / In game are shown but not selectable.";
+        "Players in Game Lobby appear here. Select Available players to invite (1–5). Host / Ready are visible but not selectable. Players in an active game are hidden.";
     }
     list.innerHTML = players.map((p) => {
       const isMe = p.username === me;
