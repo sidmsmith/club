@@ -371,12 +371,15 @@ function syncRoundTimer(state) {
   const el = document.getElementById("round-timer");
   stopRoundTimerDisplay();
   if (!state || state.phase !== "answer") {
-    if (slot) slot.style.visibility = "hidden";
+    if (slot) slot.style.display = "none";
     if (btn) btn.hidden = true;
-    if (el) el.hidden = true;
+    if (el) {
+      el.hidden = true;
+      el.textContent = "0.0s";
+    }
     return;
   }
-  slot.style.visibility = "visible";
+  slot.style.display = "";
   if (state.serverNow) {
     roundTimerOffset = Date.now() - state.serverNow;
   }
@@ -425,7 +428,7 @@ function renderJudgingPhase(state) {
   document.getElementById("phase-answer").classList.remove("active");
   document.getElementById("phase-judging").classList.add("active");
   document.getElementById("clear-btn").style.display = "none";
-  stopRoundTimerDisplay();
+  syncRoundTimer(state);
 
   const me = getUsername();
   const isHost = state.host === me;
