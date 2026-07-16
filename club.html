@@ -645,7 +645,18 @@ function mpSubscribeLobby() {
   mpLobbyChannel.subscribe("room-abandoned", (msg) => {
     let d = msg.data;
     if (typeof d === "string") try { d = JSON.parse(d); } catch (_) { return; }
-    if (d.room_id === mpRoomId) handleLeftOrAbandoned(d.abandoned_by);
+    const rid = d.room_id;
+    if (!rid) return;
+    // Always drop pending invites for this room (invitee may not have accepted yet).
+    const hadPending = mpPendingInvites.some((i) => i.room_id === rid);
+    mpPendingInvites = mpPendingInvites.filter((i) => i.room_id !== rid);
+    if (hadPending) {
+      renderInvites();
+      showToast("Invite cancelled");
+    }
+    if (mpRoomId === rid) {
+      resetLobbyAfterCancel(d.abandoned_by);
+    }
   });
 }
 
@@ -669,6 +680,15 @@ function mpSubscribeRoom(roomId) {
   });
   mpRoomChannel.subscribe("player-status", async () => {
     if (mpRole === "host") refreshWaiting();
+  });
+  mpRoomChannel.subscribe("room-abandoned", (msg) => {
+    let d = msg.data;
+    if (typeof d === "string") try { d = JSON.parse(d); } catch (_) { return; }
+    const inActiveGame = !!(
+      gameState && document.getElementById("view-game").classList.contains("active")
+    );
+    if (inActiveGame) handleLeftOrAbandoned(d.abandoned_by);
+    else resetLobbyAfterCancel(d.abandoned_by);
   });
 }
 
@@ -841,16 +861,21 @@ async function openFindGame() {
       active.player_status &&
       active.player_status !== "invited"
     ) {
-      banner.style.display = "block";
       mpRoomId = active.room_id;
       mpRole = active.role;
-      document.getElementById("return-game-btn").style.display =
-        active.room?.status === "active" ? "" : "none";
       if (active.room?.status === "lobby") {
+        // Resume waiting UI — don't show "game in progress" for an unstarted lobby.
+        banner.style.display = "none";
+        document.getElementById("return-game-btn").style.display = "none";
         if (active.role === "host" || active.player_status === "accepted") {
           if (active.role === "host") showLobbyWaitingView();
           else mpShowMpView("accepted");
         }
+      } else {
+        banner.style.display = "block";
+        document.getElementById("mp-active-game-text").textContent =
+          'You have a game in progress.';
+        document.getElementById("return-game-btn").style.display = "";
       }
     } else {
       banner.style.display = "none";
@@ -867,34 +892,75 @@ async function openFindGame() {
 
 async function mpLeaveGame() {
   if (!mpRoomId) return;
-  if (!confirm("Leave this game? Others will keep playing.")) return;
+  const inActiveGame = !!(gameState && document.getElementById("view-game").classList.contains("active"));
+  const msg = inActiveGame
+    ? "Leave this game? Others will keep playing."
+    : "Cancel this lobby? Invites will be withdrawn.";
+  if (!confirm(msg)) return;
   const me = getUsername();
   try {
-    if (gameState && gameState.phase !== "game_over") {
+    if (inActiveGame && gameState.phase !== "game_over") {
       await api(GAME_URL, {
         method: "PATCH",
         body: JSON.stringify({ action: "leave", room_id: mpRoomId, username: me }),
       });
+      handleLeftOrAbandoned(me);
     } else {
       await api(ROOM_URL, {
         method: "PATCH",
         body: JSON.stringify({ action: "abandon", room_id: mpRoomId, username: me }),
       });
+      resetLobbyAfterCancel(me);
     }
   } catch (err) {
     showToast(err.message);
   }
-  handleLeftOrAbandoned(me);
+}
+
+/** Host cancelled lobby / room abandoned while still in lobby UI. */
+function resetLobbyAfterCancel(by) {
+  // Idempotent: Ably may deliver room-abandoned on both lobby + room channels.
+  if (!mpRoomId && !mpRoomChannel) return;
+  const rid = mpRoomId;
+  mpRoomId = null;
+  mpRole = null;
+  gameState = null;
+  localJudgments = {};
+  if (rid) {
+    mpPendingInvites = mpPendingInvites.filter((i) => i.room_id !== rid);
+  }
+  if (mpRoomChannel) {
+    try { mpRoomChannel.unsubscribe(); } catch (_) {}
+    mpRoomChannel = null;
+  }
+  document.getElementById("mp-active-game-banner").style.display = "none";
+  document.getElementById("return-game-btn").style.display = "none";
+  document.getElementById("result-modal").classList.remove("open");
+  if (isInLobbyModal()) {
+    mpShowMpView("lobby");
+    renderInvites();
+    mpLoadLobbyPlayers();
+    startHeartbeat();
+  } else {
+    document.getElementById("mp-modal").classList.remove("open");
+    showView("home");
+  }
+  const me = getUsername();
+  if (by && by === me) showToast("Lobby cancelled");
+  else if (by) showToast(`${String(by).toUpperCase()} cancelled the lobby`);
 }
 
 function handleLeftOrAbandoned(by) {
   stopGamePoll();
   stopRoundTimerDisplay();
   mpRoomId = null;
+  mpRole = null;
   gameState = null;
   localJudgments = {};
+  mpPendingInvites = [];
   document.getElementById("mp-modal").classList.remove("open");
   document.getElementById("result-modal").classList.remove("open");
+  document.getElementById("mp-active-game-banner").style.display = "none";
   document.getElementById("return-game-btn").style.display = "none";
   showView("home");
   if (by && by !== getUsername()) showToast(`${String(by).toUpperCase()} left`);
@@ -975,14 +1041,18 @@ document.getElementById("mp-start-btn").addEventListener("click", async () => {
 });
 document.getElementById("mp-cancel-btn").addEventListener("click", async () => {
   if (!mpRoomId) return;
+  if (!confirm("Cancel this lobby? Invites will be withdrawn for everyone.")) return;
+  const me = getUsername();
+  const rid = mpRoomId;
   try {
     await api(ROOM_URL, {
       method: "PATCH",
-      body: JSON.stringify({ action: "abandon", room_id: mpRoomId, username: getUsername() }),
+      body: JSON.stringify({ action: "abandon", room_id: rid, username: me }),
     });
-  } catch (_) {}
-  mpRoomId = null;
-  mpShowMpView("lobby");
+  } catch (err) {
+    showToast(err.message);
+  }
+  resetLobbyAfterCancel(me);
 });
 document.getElementById("mp-return-btn").addEventListener("click", async () => {
   document.getElementById("mp-modal").classList.remove("open");
