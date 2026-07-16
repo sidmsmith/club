@@ -168,6 +168,18 @@ export default async function handler(req, res) {
              WHERE room_id=$1 AND username = ANY($2::text[])`,
             [room_id, gameState.players.map((p) => p.username)]
           );
+          // Ensure restart is obvious to all clients still on the winner modal.
+          await saveGameState(client, room_id, gameState);
+          const restartPayload = {
+            room_id,
+            state: publicState(gameState, null),
+          };
+          await ablyPublish(roomChannel(room_id), "state-update", restartPayload);
+          await ablyPublish(roomChannel(room_id), "game-restart", restartPayload);
+          return res.status(200).json({
+            room_id,
+            state: publicState(gameState, user),
+          });
         } else if (action === "leave") {
           gameState = applyAction(gameState, "leave", user);
           await client.query(

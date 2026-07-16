@@ -116,8 +116,9 @@
     <div class="modal-body">
       <div id="result-title"></div>
       <div id="result-body"></div>
+      <p class="mp-hint" id="result-wait-hint" style="display:none;text-align:center">Waiting for host to restart…</p>
       <button class="btn btn-primary" id="restart-btn" type="button" style="width:100%;display:none">RESTART</button>
-      <button class="btn" id="result-close" type="button" style="width:100%">BACK TO HOME</button>
+      <button class="btn" id="result-close" type="button" style="width:100%">LEAVE GAME</button>
     </div>
   </div>
 </div>
@@ -388,24 +389,29 @@ function renderGame(state) {
 
   renderScoreHeader(state);
 
-  if (state.phase === "answer") {
-    // Clear every player's pad when a new round begins (or after scoring).
-    if (
-      prevPhase === "judging" ||
-      (prevRound !== null && state.round !== prevRound) ||
-      state.lastEvent?.type === "round_scored"
-    ) {
-      clearPad();
-    }
-    localJudgments = {};
-    renderAnswerPhase(state);
-  } else if (state.phase === "judging") {
-    if (!Object.keys(localJudgments).length) {
-      localJudgments = { ...(state.judgments || {}) };
-    }
-    renderJudgingPhase(state);
-  } else if (state.phase === "game_over") {
+  if (state.phase === "game_over") {
     showGameOver(state);
+  } else {
+    // Restart / next round: dismiss winner modal for everyone and show gameplay.
+    document.getElementById("result-modal").classList.remove("open");
+    if (state.phase === "answer") {
+      if (
+        prevPhase === "judging" ||
+        prevPhase === "game_over" ||
+        (prevRound !== null && state.round !== prevRound) ||
+        state.lastEvent?.type === "round_scored" ||
+        state.lastEvent?.type === "game_start"
+      ) {
+        clearPad();
+      }
+      localJudgments = {};
+      renderAnswerPhase(state);
+    } else if (state.phase === "judging") {
+      if (!Object.keys(localJudgments).length) {
+        localJudgments = { ...(state.judgments || {}) };
+      }
+      renderJudgingPhase(state);
+    }
   }
 
   lastRenderedRound = state.round;
@@ -426,6 +432,7 @@ function showGameOver(state) {
   document.getElementById("result-body").textContent = scores || "";
   const isHost = state.host === getUsername();
   document.getElementById("restart-btn").style.display = isHost ? "" : "none";
+  document.getElementById("result-wait-hint").style.display = isHost ? "none" : "block";
   document.getElementById("result-modal").classList.add("open");
 }
 
@@ -505,6 +512,18 @@ function mpSubscribeRoom(roomId) {
     let d = msg.data;
     if (typeof d === "string") try { d = JSON.parse(d); } catch (_) { return; }
     if (d.state) renderGame(d.state);
+  });
+  mpRoomChannel.subscribe("game-restart", (msg) => {
+    let d = msg.data;
+    if (typeof d === "string") try { d = JSON.parse(d); } catch (_) { return; }
+    document.getElementById("result-modal").classList.remove("open");
+    lastRenderedRound = null;
+    lastRenderedPhase = "game_over";
+    if (d.state) {
+      renderGame(d.state);
+    } else {
+      refreshGameState();
+    }
   });
   mpRoomChannel.subscribe("player-status", async () => {
     if (mpRole === "host") refreshWaiting();
