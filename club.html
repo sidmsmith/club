@@ -36,6 +36,10 @@
     </div>
 
     <div id="phase-answer">
+      <div class="timer-row">
+        <button class="btn btn-timer" id="start-timer-btn" type="button">Start Timer</button>
+        <div class="round-timer" id="round-timer" style="display:none">0.0s</div>
+      </div>
       <div class="pad-wrap"><canvas id="draw-canvas"></canvas></div>
       <p class="wait-hint" id="wait-hint" style="display:none">Waiting for others… you can still update and submit again.</p>
       <div class="game-actions">
@@ -169,6 +173,8 @@ let lastRenderedPhase = null;
 let gamePollTimer = null;
 let refreshInFlight = null;
 let refreshQueued = false;
+let roundTimerInterval = null;
+let roundTimerOffset = 0; // clientNow - serverNow
 
 function getUsername() {
   return (localStorage.getItem("club_username") || "").trim().toLowerCase();
@@ -347,6 +353,50 @@ function renderScoreHeader(state) {
   }).join("");
 }
 
+function formatElapsed(ms) {
+  if (ms == null || !Number.isFinite(ms)) return "";
+  return `${(Math.max(0, ms) / 1000).toFixed(1)}s`;
+}
+
+function stopRoundTimerDisplay() {
+  if (roundTimerInterval) {
+    clearInterval(roundTimerInterval);
+    roundTimerInterval = null;
+  }
+}
+
+function syncRoundTimer(state) {
+  const btn = document.getElementById("start-timer-btn");
+  const el = document.getElementById("round-timer");
+  stopRoundTimerDisplay();
+  if (!state || state.phase !== "answer") {
+    if (btn) btn.style.display = "none";
+    if (el) el.style.display = "none";
+    return;
+  }
+  btn.style.display = "";
+  if (state.serverNow) {
+    roundTimerOffset = Date.now() - state.serverNow;
+  }
+  if (state.timerStartedAt) {
+    btn.disabled = true;
+    btn.textContent = "Timer started";
+    el.style.display = "block";
+    const start = state.timerStartedAt;
+    const tick = () => {
+      const serverNowApprox = Date.now() - roundTimerOffset;
+      el.textContent = formatElapsed(serverNowApprox - start);
+    };
+    tick();
+    roundTimerInterval = setInterval(tick, 100);
+  } else {
+    btn.disabled = false;
+    btn.textContent = "Start Timer";
+    el.style.display = "none";
+    el.textContent = "0.0s";
+  }
+}
+
 function renderAnswerPhase(state, { forceResize = false } = {}) {
   document.getElementById("phase-answer").classList.add("active");
   document.getElementById("phase-judging").classList.remove("active");
@@ -357,7 +407,7 @@ function renderAnswerPhase(state, { forceResize = false } = {}) {
   const submitted = !!mine?.hasSubmitted;
   document.getElementById("wait-hint").style.display = submitted ? "block" : "none";
   document.getElementById("submit-btn").disabled = !padDirty;
-  // Do not resize on every poll/sync — that races and can wipe drawings.
+  syncRoundTimer(state);
   if (forceResize || canvas.width < 2) {
     requestAnimationFrame(resizeCanvas);
   }
@@ -373,6 +423,7 @@ function renderJudgingPhase(state) {
   document.getElementById("phase-answer").classList.remove("active");
   document.getElementById("phase-judging").classList.add("active");
   document.getElementById("clear-btn").style.display = "none";
+  stopRoundTimerDisplay();
 
   const me = getUsername();
   const isHost = state.host === me;
@@ -389,12 +440,17 @@ function renderJudgingPhase(state) {
   }
 
   grid.innerHTML = players.map((p) => {
-    const img = state.submissions?.[p.username]?.imageDataUrl || "";
+    const sub = state.submissions?.[p.username];
+    const img = sub?.imageDataUrl || "";
     const j = isHost ? localJudgments[p.username] : state.judgments?.[p.username];
     const cls = j === "correct" ? "correct" : j === "incorrect" ? "incorrect" : "";
     const label = p.username.toUpperCase();
+    const elapsed = sub?.elapsedMs ?? p.elapsedMs;
+    const timeHtml = elapsed != null
+      ? ` <span class="time">${formatElapsed(elapsed)}</span>`
+      : "";
     return `<div class="host-cell ${cls} ${isHost ? "interactive" : ""}" data-user="${p.username}">
-      <div class="name" title="${label}">${label}</div>
+      <div class="name" title="${label}">${label}${timeHtml}</div>
       <img src="${img}" alt="${label}">
     </div>`;
   }).join("");
@@ -769,6 +825,7 @@ async function mpLeaveGame() {
 
 function handleLeftOrAbandoned(by) {
   stopGamePoll();
+  stopRoundTimerDisplay();
   mpRoomId = null;
   gameState = null;
   localJudgments = {};
@@ -882,6 +939,22 @@ document.getElementById("return-game-btn").addEventListener("click", async () =>
 });
 
 document.getElementById("clear-btn").addEventListener("click", clearPad);
+document.getElementById("start-timer-btn").addEventListener("click", async () => {
+  if (!mpRoomId) return;
+  try {
+    const data = await api(GAME_URL, {
+      method: "PATCH",
+      body: JSON.stringify({
+        action: "start_timer",
+        room_id: mpRoomId,
+        username: getUsername(),
+      }),
+    });
+    if (data.state) renderGame(data.state);
+  } catch (err) {
+    showToast(err.message);
+  }
+});
 document.getElementById("submit-btn").addEventListener("click", async () => {
   if (!padDirty || !mpRoomId) return;
   try {

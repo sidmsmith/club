@@ -53,6 +53,7 @@ function slimNotify(roomId, gameState, extra = {}) {
     winners: gameState?.winners || [],
     lastEvent: gameState?.lastEvent || null,
     submittedUsernames: Object.keys(gameState?.submissions || {}),
+    timerStartedAt: gameState?.timerStartedAt || null,
     scores: Object.fromEntries(active.map((p) => [p.username, p.score])),
     sync: true,
     ...extra,
@@ -162,6 +163,8 @@ export default async function handler(req, res) {
           gameState = applyAction(gameState, "submit_answer", user, {
             imageDataUrl: body.imageDataUrl,
           });
+        } else if (action === "start_timer") {
+          gameState = applyAction(gameState, "start_timer", user);
         } else if (action === "set_judgment") {
           gameState = applyAction(gameState, "set_judgment", user, {
             targetUsername: body.target_username,

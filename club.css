@@ -188,6 +188,33 @@ header {
   background: #fff;
   touch-action: none;
 }
+.timer-row {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 6px;
+  flex-shrink: 0;
+}
+.btn-timer {
+  background: #1565c0;
+  color: #fff;
+  border-color: #1565c0;
+  padding: 8px 16px;
+  font-size: 0.85rem;
+}
+.btn-timer:disabled {
+  background: #90a4ae;
+  border-color: #90a4ae;
+  color: #fff;
+  opacity: 1;
+}
+.round-timer {
+  font-size: 1.6rem;
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  letter-spacing: 0.04em;
+  line-height: 1;
+}
 #draw-canvas {
   width: 100%;
   height: 100%;
@@ -253,6 +280,11 @@ header {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+.host-cell .name .time {
+  font-weight: 600;
+  opacity: 0.85;
+  margin-left: 4px;
 }
 
 .host-actions {
