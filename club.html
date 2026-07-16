@@ -830,12 +830,12 @@ document.getElementById("restart-btn").addEventListener("click", async () => {
 });
 document.getElementById("result-close").addEventListener("click", async () => {
   document.getElementById("result-modal").classList.remove("open");
-  // Leaving room fully so lobby is free; restart keeps room for judge path.
-  if (mpRoomId && gameState?.phase === "game_over") {
+  // Leave only this player so the judge can still Restart for remaining players.
+  if (mpRoomId) {
     try {
-      await api(ROOM_URL, {
+      await api(GAME_URL, {
         method: "PATCH",
-        body: JSON.stringify({ action: "abandon", room_id: mpRoomId, username: getUsername() }),
+        body: JSON.stringify({ action: "leave", room_id: mpRoomId, username: getUsername() }),
       });
     } catch (_) {}
   }
