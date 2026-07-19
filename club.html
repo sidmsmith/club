@@ -290,6 +290,40 @@ function clearPad() {
   document.getElementById("submit-btn").disabled = true;
 }
 
+/** Clear wipes the pad and withdraws any submitted answer on the server. */
+async function onClearPadClick() {
+  clearPad();
+  if (!mpRoomId || gameState?.phase !== "answer") return;
+  const me = getUsername();
+  const wasSubmitted = !!gameState?.players?.find((p) => p.username === me)?.hasSubmitted;
+  if (!wasSubmitted) {
+    renderScoreHeader(gameState);
+    renderAnswerPhase(gameState);
+    return;
+  }
+  try {
+    const data = await api(GAME_URL, {
+      method: "PATCH",
+      body: JSON.stringify({
+        action: "clear_answer",
+        room_id: mpRoomId,
+        username: me,
+      }),
+    });
+    if (data.state) renderGame(data.state);
+    else {
+      renderScoreHeader(gameState);
+      renderAnswerPhase(gameState);
+    }
+  } catch (err) {
+    showToast(err.message);
+    if (gameState) {
+      renderScoreHeader(gameState);
+      renderAnswerPhase(gameState);
+    }
+  }
+}
+
 function pointerPos(e) {
   const r = canvas.getBoundingClientRect();
   const src = e.touches ? e.touches[0] : e;
@@ -1320,7 +1354,7 @@ document.getElementById("return-game-btn").addEventListener("click", async () =>
   else enterGame();
 });
 
-document.getElementById("clear-btn").addEventListener("click", clearPad);
+document.getElementById("clear-btn").addEventListener("click", onClearPadClick);
 document.getElementById("start-timer-btn").addEventListener("click", async () => {
   if (!mpRoomId) return;
   try {

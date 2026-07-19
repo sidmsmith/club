@@ -50,7 +50,7 @@ Open `http://localhost:3000/club`.
 
 1. Host invites 1-5 players (2-6 total) from the lobby.
 2. Each round: draw on the pad, then Submit (can resubmit until everyone has submitted).
-3. Names in the header are red until submitted, green after.
+3. Names in the header are red until submitted, green after. Clear wipes the pad and unsubmits on the server (name goes red again) until you Submit.
 4. When all have submitted, everyone sees all pads; the host marks correct/incorrect.
 5. Host Submit awards +1 for correct answers and starts the next round (pads clear for everyone).
 6. Host can End Game anytime; Restart starts a new game in the same room (no lobby).
